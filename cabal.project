@@ -1,0 +1,7 @@
+packages:
+  minion
+  minion-conduit
+  minion-wai-extra
+  minion-jwt
+  minion-htmx
+  minion-openapi3
