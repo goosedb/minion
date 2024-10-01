@@ -6,6 +6,7 @@ license-file:       LICENSE
 author:             goosedb
 maintainer:         goosedb@yandex.ru
 category:           Web
+synopsis:           Minion wrappers for wai-extra
 build-type:         Simple
 extra-source-files: README.md
 
@@ -56,7 +57,7 @@ library
     Web.Minion.Response.ServerEvent
 
   build-depends:
-    , base
+    , base >= 4.16 && < 5
     , binary
     , bytestring
     , http-media

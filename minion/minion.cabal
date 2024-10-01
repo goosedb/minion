@@ -1,8 +1,10 @@
 cabal-version:      3.0
 name:               minion
-version:            0.1.0.0
+version:            0.1.0.1
 license:            MIT
 license-file:       LICENSE
+category:           Web
+synopsis:           A Haskell introspectable web router
 maintainer:         goosedb@yandex.ru
 build-type:         Simple
 extra-source-files: README.md
@@ -92,7 +94,7 @@ library
 
   build-depends:
     , aeson
-    , base
+    , base >= 4.16 && < 5
     , base64-bytestring
     , binary
     , bytestring

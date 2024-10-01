@@ -35,7 +35,7 @@ type QueryParamName = Text.Text
 {- | Tries to get query param
 
 @
-'queryParam'' "foo" pure '/>' ...
+'queryParam'' "foo" '/>' ...
 @
 -}
 {-# INLINE queryParam' #-}
@@ -57,7 +57,7 @@ queryParam' qn = QueryParam (Text.Encode.encodeUtf8 qn) \makeError ->
 {- | Tries to get query param
 
 @
-'queryParam' "foo" pure '/>' ...
+'queryParam' "foo" '/>' ...
 @
 -}
 {-# INLINE queryParam #-}
@@ -76,7 +76,7 @@ queryParam qn = QueryParam (Text.Encode.encodeUtf8 qn) \makeError ->
 {- | Tries to get query param
 
 @
-'queryParam' "foo" pure '/>' ...
+'queryParam' "foo" '/>' ...
 @
 -}
 {-# INLINE queryParamLenient #-}
@@ -95,7 +95,7 @@ queryParamLenient qn = QueryParam (Text.Encode.encodeUtf8 qn) \_ ->
 {- | Tries to get query param
 
 @
-'queryParam' "foo" pure '/>' ...
+'queryParam' "foo" '/>' ...
 @
 -}
 {-# INLINE queryParamLenient' #-}

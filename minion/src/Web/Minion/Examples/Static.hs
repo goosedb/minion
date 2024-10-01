@@ -3,7 +3,6 @@ module Web.Minion.Examples.Static (app) where
 import Web.Minion
 import Web.Minion.Static
 
--- app :: IO ()
 app :: ApplicationM IO
 app = serve api
 

@@ -4,6 +4,7 @@ version:            0.1.0.0
 license:            MIT
 license-file:       LICENSE
 author:             Danil Berestov
+synopsis:           Minion HTMX support
 maintainer:         goosedb@yandex.ru
 category:           Web
 build-type:         Simple
@@ -51,7 +52,7 @@ library
   import:           common
   exposed-modules:  Web.Minion.Htmx.Headers
   build-depends:
-    , base
+    , base >= 4.16 && < 5
     , bytestring
     , http-types
     , minion

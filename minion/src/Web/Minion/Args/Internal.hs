@@ -120,10 +120,10 @@ newtype Hide a = Hide a
 class Hidden m a where
   runHidden :: Hide a -> m ()
 
-instance (Monad m) => Hidden m (WithHeader a b m a) where
+instance (Monad m) => Hidden m (WithHeader a b m v) where
   runHidden (Hide (WithHeader a)) = a $> ()
 
-instance (Monad m) => Hidden m (WithQueryParam a b m a) where
+instance (Monad m) => Hidden m (WithQueryParam a b m v) where
   runHidden (Hide (WithQueryParam a)) = a $> ()
 
 instance (Monad m) => Hidden m (WithPiece a) where

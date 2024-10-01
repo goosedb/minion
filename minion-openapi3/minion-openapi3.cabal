@@ -5,6 +5,7 @@ license:            MIT
 license-file:       LICENSE
 author:             Danil Berestov
 maintainer:         goosedb@yandex.ru
+synopsis:           Minion openapi3 support
 category:           Web
 build-type:         Simple
 extra-source-files: README.md
@@ -57,7 +58,7 @@ library
 
   build-depends:
     , aeson
-    , base
+    , base >= 4.16 && < 5
     , blaze-html
     , blaze-markup
     , bytestring
@@ -70,7 +71,6 @@ library
     , insert-ordered-containers
     , lens
     , minion
-    , minion-wai-extra
     , openapi3
     , template-haskell
     , text

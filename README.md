@@ -1,6 +1,7 @@
 # Minion
 
 Minion is Haskell library for developing web applications. It stands between [Scotty](https://hackage.haskell.org/package/scotty) and [Servant](https://hackage.haskell.org/package/servant-server)  
+
 |                  | Scotty | Minion | Servant |
 | ---------------- | ------ | ------ | ------- |
 | As simple as ABC | Yes    | No     | No      |
@@ -8,6 +9,7 @@ Minion is Haskell library for developing web applications. It stands between [Sc
 | Typesafe         | No     | Yes    | Yes     |
 | Introspectable   | No     | Yes    | Yes     |
 | Generated client | No     | No     | Yes     |
+
   
 Since Minion defines servers at the term level, it's easier to start and without excess verbosity.
 

@@ -5,6 +5,7 @@ license:            MIT
 license-file:       LICENSE
 author:             goosedb
 maintainer:         goosedb@yandex.ru
+synopsis:           Minion JWT support
 category:           Web
 build-type:         Simple
 extra-source-files: README.md
@@ -55,7 +56,7 @@ library
 
   build-depends:
     , aeson
-    , base
+    , base >= 4.16 && < 5
     , bytestring
     , http-types
     , jose
