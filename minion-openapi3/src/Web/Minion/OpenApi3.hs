@@ -6,6 +6,7 @@ module Web.Minion.OpenApi3 (
   OpenApi3Description (..),
   ToResponses (..),
   openapi3,
+  generateOpenApi3,
   -- | Use these newtypes to implement instances for according auths/response bodies/request bodies
   -- We do not implement it for concrete types to avoid extra dependencies
   AsCookieJwt (..),
@@ -275,6 +276,9 @@ instance (ToResponses a, ToResponses (Union as)) => ToResponses (Union (a ': as)
     let (resp, def) = toResponses @a
         (resps, defs) = toResponses @(Union as)
      in (resp <> resps, def <> defs)
+
+instance ToResponses (Union '[]) where
+  toResponses = (mempty, mempty)
 
 instance (ToResponses a, IsStatus status) => ToResponses (WithStatus status a) where
   toResponses =
