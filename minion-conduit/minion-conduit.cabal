@@ -57,7 +57,7 @@ library
     Web.Minion.Response.Conduit
 
   build-depends:
-    , base >= 4.16 && < 5
+    , base        >=4.16 && <5
     , binary
     , bytestring
     , conduit

@@ -7,7 +7,9 @@ category:           Web
 synopsis:           A Haskell introspectable web router
 maintainer:         goosedb@yandex.ru
 build-type:         Simple
-extra-source-files: README.md
+extra-source-files:
+  CHANGELOG.md
+  README.md
 
 common common
   ghc-options:        -Wall
@@ -94,7 +96,7 @@ library
 
   build-depends:
     , aeson
-    , base >= 4.16 && < 5
+    , base                >=4.16 && <5
     , base64-bytestring
     , binary
     , bytestring

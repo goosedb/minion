@@ -52,7 +52,7 @@ library
   import:           common
   exposed-modules:  Web.Minion.Htmx.Headers
   build-depends:
-    , base >= 4.16 && < 5
+    , base        >=4.16 && <5
     , bytestring
     , http-types
     , minion
