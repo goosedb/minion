@@ -8,7 +8,9 @@ maintainer:         goosedb@yandex.ru
 synopsis:           Minion openapi3 support
 category:           Web
 build-type:         Simple
-extra-source-files: README.md
+extra-source-files:
+  index.html.input
+  README.md
 
 common common
   ghc-options:        -Wall
