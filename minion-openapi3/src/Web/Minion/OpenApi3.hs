@@ -34,6 +34,7 @@ import Data.Data (Proxy (..))
 import Data.Foldable (Foldable (..))
 import Data.HashMap.Strict.InsOrd qualified as HM
 import Data.HashMap.Strict.InsOrd qualified as InsOrdHashMap
+import Data.HashSet.InsOrd qualified as InsOrdHashSet
 import Data.Maybe (listToMaybe)
 import Data.OpenApi.Declare (runDeclare)
 import Data.Text (Text)
@@ -77,7 +78,7 @@ class IsOpenApi3Description a where
 instance IsOpenApi3Description OpenApi3Description where
   toOpenApi3Description = id
 
-data OpenApi3Description = DescriptionText Text | SummaryText Text
+data OpenApi3Description = DescriptionText Text | SummaryText Text | TagText Text
 
 instance (AttachSecuritySchemas as) => AttachRequestSchema (Auth as a) where
   attachRequestSchema = attachSecuritySchemas @as
@@ -347,6 +348,7 @@ generateOpenApi3 = \case
   Description (toOpenApi3Description -> desc) r -> case desc of
     DescriptionText txt -> generateOpenApi3 r & allOperations . description %~ (Just txt <>)
     SummaryText txt -> generateOpenApi3 r & allOperations . summary %~ (Just txt <>)
+    TagText txt -> generateOpenApi3 r & allOperations . tags %~ InsOrdHashSet.insert txt
   QueryParam @a @presence bname _ r -> generateOpenApi3 r & openapi3QueryParam @presence @a bname
   Handle @o httpMethod _ ->
     let
