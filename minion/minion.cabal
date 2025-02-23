@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               minion
-version:            0.1.0.1
+version:            0.2.0.0
 license:            MIT
 license-file:       LICENSE
 category:           Web
@@ -52,18 +52,20 @@ common common
 library
   import:           common
   exposed-modules:
-    Web.Minion
-    Web.Minion.Args
-    Web.Minion.Args.Internal
-    Web.Minion.Auth
-    Web.Minion.Auth.Basic
-    Web.Minion.Error
+
     Web.Minion.Examples.BasicAuth
     Web.Minion.Examples.ComplexResponse
     Web.Minion.Examples.HelloWorld
     Web.Minion.Examples.Introspection
     Web.Minion.Examples.Json
     Web.Minion.Examples.Static
+
+    Web.Minion
+    Web.Minion.Args
+    Web.Minion.Args.Internal
+    Web.Minion.Auth
+    Web.Minion.Auth.Basic
+    Web.Minion.Error
     Web.Minion.Introspect
     Web.Minion.Json
     Web.Minion.Media
@@ -82,6 +84,10 @@ library
     Web.Minion.Request.Method
     Web.Minion.Request.Query
     Web.Minion.Request.Query.Internal
+    Web.Minion.Request.Query.QueryFlag
+    Web.Minion.Request.Query.QueryForm 
+    Web.Minion.Request.Query.QueryParam
+    Web.Minion.Request.Query.QueryParams
     Web.Minion.Request.Url
     Web.Minion.Response
     Web.Minion.Response.Body
@@ -107,6 +113,7 @@ library
     , http-api-data
     , http-media
     , http-types
+    , network-uri
     , string-conversions
     , text
     , transformers

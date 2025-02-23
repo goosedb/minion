@@ -85,9 +85,9 @@ api = "api" /> myAuth .> ["post" /> postApi, "comments" /> commentsApi, "images"
   commentsApi =
     description "Comments api"
       /> [
-           [ queryParam' @PostId "postId"
-              .> queryParam @Size "size"
-              .> queryParam @Page "page"
+           [ queryParam @Required @PostId "postId"
+              .> queryParam @Required @Size "size"
+              .> queryParam @Required @Page "page"
               .> description "Get comments for post"
               /> handleJson @[Text] GET undefined
            , capture @CommentId "commentId"

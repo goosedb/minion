@@ -16,6 +16,8 @@ import Control.Exception qualified as IOExc
 import Control.Monad.Catch qualified as Exc
 import Data.ByteString.Lazy qualified as Bytes.Lazy
 import Data.Kind (Type)
+import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty qualified as Nel
 import Data.Void (Void)
 import Web.Minion.Args.Internal (
   Arg,
@@ -67,9 +69,7 @@ data Router' i (ts :: Type) m where
     -- | Query param name
     ByteString ->
     -- | Parse query param
-    -- Outer Maybe -- is there key
-    -- Inner Maybe -- is there value
-    (MakeError -> Maybe (Maybe ByteString) -> m (Arg presence parsing a)) ->
+    (MakeError -> Maybe (NonEmpty (Maybe ByteString)) -> m (Arg presence parsing a)) ->
     Router' i (ts :+ WithQueryParam presence parsing m a) m ->
     Router' i ts m
   Captures ::
@@ -163,7 +163,7 @@ route builders@ErrorBuilders{..} state args (Header @a @presence @parsing header
       withHeader = WithHeader (get (headerErrorBuilder req) header) :#! args
    in route builders state withHeader r req
 route builders@ErrorBuilders{..} state args (QueryParam @a @presence @parsing queryParamName parse r) = \req ->
-  let mbQueryParamVal = lookup queryParamName $ Http.queryString req
+  let mbQueryParamVal = Nel.nonEmpty $ map snd $ filter ((queryParamName ==) . fst) $ Http.queryString req
       withQueryParam = WithQueryParam (parse (queryParamsErrorBuilder req) mbQueryParamVal) :#! args
    in route builders state withQueryParam r req
 route builders RoutingState{..} args (Piece txt r) = case path of

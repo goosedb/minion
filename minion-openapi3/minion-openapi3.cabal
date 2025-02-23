@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               minion-openapi3
-version:            0.1.0.1
+version:            0.2.0.0
 license:            MIT
 license-file:       LICENSE
 author:             Danil Berestov
@@ -18,6 +18,11 @@ extra-source-files:
   ui/*.js
   ui/*.js.map
   ui/*.png
+
+Flag Examples
+  Description: Enable examples build
+  Default:     False
+  Manual:      True
 
 common common
   ghc-options:        -Wall
@@ -60,7 +65,13 @@ common common
 
 library
   import:           common
-  exposed-modules:  Web.Minion.OpenApi3
+  if flag(Examples)
+    exposed-modules:
+      Web.Minion.Examples.OpenApi3
+  exposed-modules:
+    Web.Minion.OpenApi3
+    Web.Minion.OpenApi3.Ui
+
   other-modules:
     Web.Minion.Embed
     Web.Minion.Files
@@ -86,3 +97,17 @@ library
 
   hs-source-dirs:   src
   default-language: Haskell2010
+
+
+executable minion-openapi3-example
+  import:           common
+  main-is:          OpenApi3.hs
+  build-depends:
+    , base
+    , minion
+    , minion-openapi3
+    , warp
+
+  hs-source-dirs:   app
+  default-language: Haskell2010
+  ghc-options:      -threaded
