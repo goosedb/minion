@@ -9,7 +9,7 @@ import Data.Text.Encoding qualified as Text.Encoding
 import Data.Text.IO qualified
 import GHC.Generics (Generic)
 import Network.HTTP.Media
-import Web.Minion
+import Web.Minion hiding (queryParams)
 import Web.Minion.Auth.Basic
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Media

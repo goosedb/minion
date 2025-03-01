@@ -49,17 +49,24 @@ common common
     UndecidableInstances
     ViewPatterns
 
+flag examples
+  description: Enable examples build
+  default:     False
+  manual:      True
+
 library
   import:           common
+
+  if flag(examples)
+    exposed-modules:
+      Web.Minion.Examples.BasicAuth
+      Web.Minion.Examples.ComplexResponse
+      Web.Minion.Examples.HelloWorld
+      Web.Minion.Examples.Introspection
+      Web.Minion.Examples.Json
+      Web.Minion.Examples.Static
+
   exposed-modules:
-
-    Web.Minion.Examples.BasicAuth
-    Web.Minion.Examples.ComplexResponse
-    Web.Minion.Examples.HelloWorld
-    Web.Minion.Examples.Introspection
-    Web.Minion.Examples.Json
-    Web.Minion.Examples.Static
-
     Web.Minion
     Web.Minion.Args
     Web.Minion.Args.Internal
@@ -85,7 +92,8 @@ library
     Web.Minion.Request.Query
     Web.Minion.Request.Query.Internal
     Web.Minion.Request.Query.QueryFlag
-    Web.Minion.Request.Query.QueryForm 
+    Web.Minion.Request.Query.QueryFlag.Static
+    Web.Minion.Request.Query.QueryForm
     Web.Minion.Request.Query.QueryParam
     Web.Minion.Request.Query.QueryParams
     Web.Minion.Request.Url
@@ -122,8 +130,34 @@ library
   hs-source-dirs:   src
   default-language: Haskell2010
 
+test-suite test
+  type:           exitcode-stdio-1.0
+  main-is:        Spec.hs
+  hs-source-dirs: test
+  build-depends:
+    , aeson
+    , base
+    , bytestring
+    , minion
+    , text
+    , hspec
+    , hspec-expectations
+    , wai
+    , warp
+    , http-types
+    , http-api-data
+    , http-media
+    , case-insensitive
+    , binary
+    , lens-aeson
+    , lens
+
 executable minion-introspection-example
   import:           common
+
+  if !flag(examples)
+    buildable: False
+
   main-is:          Introspection.hs
   build-depends:
     , base
@@ -136,6 +170,10 @@ executable minion-introspection-example
 
 executable minion-static-example
   import:           common
+
+  if !flag(examples)
+    buildable: False
+
   main-is:          Static.hs
   build-depends:
     , base
@@ -148,6 +186,10 @@ executable minion-static-example
 
 executable minion-basic-auth-example
   import:           common
+
+  if !flag(examples)
+    buildable: False
+
   main-is:          BasicAuth.hs
   build-depends:
     , base
@@ -160,6 +202,10 @@ executable minion-basic-auth-example
 
 executable minion-complex-response-example
   import:           common
+
+  if !flag(examples)
+    buildable: False
+
   main-is:          ComplexResponse.hs
   build-depends:
     , base
@@ -172,6 +218,10 @@ executable minion-complex-response-example
 
 executable minion-json-example
   import:           common
+
+  if !flag(examples)
+    buildable: False
+
   main-is:          Json.hs
   build-depends:
     , base
@@ -184,6 +234,10 @@ executable minion-json-example
 
 executable minion-hello-world-example
   import:           common
+
+  if !flag(examples)
+    buildable: False
+
   main-is:          HelloWorld.hs
   build-depends:
     , base

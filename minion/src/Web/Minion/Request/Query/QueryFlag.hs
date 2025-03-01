@@ -2,7 +2,6 @@ module Web.Minion.Request.Query.QueryFlag (QueryFlag (..), QueryFlagStrict (..))
 
 import Control.Applicative (asum)
 import Control.Monad.Catch (MonadThrow)
-import Data.ByteString qualified as Bytes
 import Web.Minion.Args.Internal
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Request.Query.Internal
@@ -17,18 +16,18 @@ class QueryFlagStrict presence where
     -- | .
     QueryParamName ->
     ValueCombinator i (WithQueryParam presence Strict m QueryFlag) ts m
+  mapFlag :: forall a. (QueryFlag -> a) -> Arg presence Strict QueryFlag -> Arg presence Strict a
 
 instance QueryFlagStrict Required where
   queryFlag qn = withQueryParam qn \makeError ->
     maybe
       (badReq makeError noKeyError qn)
-      (maybe (pure (QueryFlag True)) (pure . parseQueryFlag) . asum)
+      (maybe (pure (QueryFlag True)) (pure . QueryFlag . parseQueryFlag) . asum)
+  mapFlag = ($)
 
 instance QueryFlagStrict Optional where
   queryFlag qn = withQueryParam qn \_ ->
     maybe
       (pure Nothing)
-      (fmap Just . maybe (pure (QueryFlag True)) (pure . parseQueryFlag) . asum)
-
-parseQueryFlag :: Bytes.ByteString -> QueryFlag
-parseQueryFlag = QueryFlag . flip (elem @[]) ["1", "true", ""]
+      (fmap Just . maybe (pure (QueryFlag True)) (pure . QueryFlag . parseQueryFlag) . asum)
+  mapFlag = fmap

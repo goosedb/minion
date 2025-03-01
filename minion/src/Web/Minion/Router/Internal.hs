@@ -150,7 +150,7 @@ route ::
   RHList ts ->
   Router' i ts m ->
   ApplicationM m
-route builders state args (Alt routes) = \req resp -> goThrough $ map (\r -> route builders state args r req resp) routes
+route builders state args (Alt routes) = \req resp -> goThrough (NoMatch Nothing) $ map (\r -> route builders state args r req resp) routes
 route builders state args (Middleware mw r) = mw (route builders state args r)
 route builders state args (MapArgs f r) = route builders state (f args) r
 route builders state args (Description _ r) = route builders state args r
@@ -168,7 +168,7 @@ route builders@ErrorBuilders{..} state args (QueryParam @a @presence @parsing qu
    in route builders state withQueryParam r req
 route builders RoutingState{..} args (Piece txt r) = case path of
   (t : ts) | txt == t -> route builders RoutingState{path = ts, ..} args r
-  _ -> \_ _ -> throwMIO NoMatch
+  _ -> \_ _ -> throwMIO (NoMatch Nothing)
 route builders@ErrorBuilders{..} RoutingState{..} args (Captures parse _ r) = \req resp -> do
   parsed <- parse (captureErrorBuilder req) path
   route builders RoutingState{path = [], ..} (WithPieces parsed :#! args) r req resp
@@ -176,7 +176,7 @@ route builders@ErrorBuilders{..} RoutingState{..} args (Capture parse _ r) = \re
   (t : ts) -> do
     v <- parse (captureErrorBuilder req) t
     route builders RoutingState{path = ts, ..} (WithPiece v :#! args) r req resp
-  _ -> throwMIO NoMatch
+  _ -> throwMIO (NoMatch Nothing)
 
 {-# INLINE routeHandle #-}
 routeHandle ::
@@ -197,12 +197,12 @@ routeHandle path args method f req resp = do
     else IO.liftIO $ resp $ Wai.responseBuilder Http.status406 [] mempty
 
 {-# INLINE goThrough #-}
-goThrough :: (IO.MonadIO m, Exc.MonadCatch m) => [m b] -> m b
-goThrough (a : as) =
+goThrough :: (IO.MonadIO m, Exc.MonadCatch m) => NoMatch -> [m b] -> m b
+goThrough _ (a : as) =
   Exc.try @_ @NoMatch a >>= \case
-    Left NoMatch -> goThrough as
+    Left e -> goThrough e as
     Right x -> pure x
-goThrough [] = throwMIO NoMatch
+goThrough e [] = throwMIO e
 
 {-# INLINE throwMIO #-}
 throwMIO :: (Exc.Exception e, IO.MonadIO m) => e -> m a
@@ -214,7 +214,7 @@ checkHandler req path method
   | method == Http.requestMethod req
   , null path || path == [mempty] =
       pure ()
-  | otherwise = throwMIO NoMatch
+  | otherwise = throwMIO (NoMatch Nothing)
 
 {-# INLINE lookupHeader #-}
 lookupHeader :: Wai.Request -> Http.HeaderName -> [ByteString]

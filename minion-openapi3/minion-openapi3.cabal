@@ -19,7 +19,7 @@ extra-source-files:
   ui/*.js.map
   ui/*.png
 
-Flag Examples
+Flag examples
   Description: Enable examples build
   Default:     False
   Manual:      True
@@ -65,9 +65,10 @@ common common
 
 library
   import:           common
-  if flag(Examples)
+  if flag(examples)
     exposed-modules:
       Web.Minion.Examples.OpenApi3
+
   exposed-modules:
     Web.Minion.OpenApi3
     Web.Minion.OpenApi3.Ui
@@ -101,6 +102,8 @@ library
 
 executable minion-openapi3-example
   import:           common
+  if !flag(examples)
+    Buildable: False
   main-is:          OpenApi3.hs
   build-depends:
     , base

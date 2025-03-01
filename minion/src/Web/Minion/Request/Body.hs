@@ -1,4 +1,4 @@
-module Web.Minion.Request.Body where
+module Web.Minion.Request.Body (DecodeBody(..), IsRequest(..), ReqBody(..), Decode(..), reqBody) where
 
 import Control.Monad ((>=>))
 import Control.Monad.Catch
@@ -41,20 +41,33 @@ class DecodeBody cts a where
     IO Bytes.Lazy.ByteString ->
     m (ReqBody cts a)
 
+  decodeBodyFirst ::
+    forall m.
+    (MonadIO m, MonadThrow m) =>
+    MakeError ->
+    -- | Request body
+    IO Bytes.Lazy.ByteString ->
+    m (ReqBody cts a)
+
 instance DecodeBody '[] a where
   decodeBody makeError _ _ = throwM $ makeError Http.status415 "Unsupported Content-Type"
+  decodeBodyFirst makeError _ = throwM $ makeError Http.status415 "Unsupported Content-Type"
 
 instance (ContentType ct, Decode ct a, DecodeBody cts a) => DecodeBody (ct ': cts) a where
   decodeBody makeError contentType body
-    | Just _ <- Http.matchAccept (Nel.toList $ media @ct) contentType =
-        liftIO body
-          >>= either
-            (const $ throwM $ makeError Http.status400 "Failed to parse body")
-            (pure . ReqBody)
-            . decode @ct @a
+    | Just _ <- Http.matchAccept (Nel.toList $ media @ct) contentType = parseCt makeError body
     | otherwise = do
         ReqBody a :: ReqBody cts a <- decodeBody makeError contentType body
         pure $ ReqBody a
+  decodeBodyFirst = parseCt @ct
+
+parseCt :: forall ct cts a m. (MonadIO m, MonadThrow m, Decode ct a) => MakeError -> IO Bytes.Lazy.ByteString -> m (ReqBody (ct ': cts) a)
+parseCt makeError body =
+  liftIO body
+    >>= either
+      (const $ throwM $ makeError Http.status400 "Failed to parse body")
+      (pure . ReqBody)
+      . decode @ct @a
 
 class Decode ct a where
   decode :: Bytes.Lazy.ByteString -> Either Text.Text a
@@ -85,5 +98,5 @@ reqBody ::
   -- | .
   ValueCombinator i (WithReq m (ReqBody cts r)) ts m
 reqBody = Request \makeError req -> case lookup Http.hContentType $ Wai.requestHeaders req of
-  Nothing -> throwM $ makeError req Http.status415 "Unsupported Content-Type"
+  Nothing -> decodeBodyFirst @cts @r (makeError req) (Wai.lazyRequestBody req)
   Just ct -> decodeBody @cts @r (makeError req) ct (Wai.lazyRequestBody req)

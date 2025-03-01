@@ -48,11 +48,23 @@ common common
     UndecidableInstances
     ViewPatterns
 
+
+Flag examples
+  Description: Enable examples build
+  Default:     False
+  Manual:      True
+
+
 library
   import:           common
+
+  if flag(examples)
+    exposed-modules:
+      Web.Minion.Examples.Jwt
+
   exposed-modules:
     Web.Minion.Auth.Jwt
-    Web.Minion.Examples.Jwt
+
 
   build-depends:
     , aeson
@@ -72,6 +84,8 @@ library
 
 executable minion-jwt-example
   import:           common
+  if !flag(examples)
+    Buildable: False
   main-is:          Jwt.hs
   build-depends:
     , base

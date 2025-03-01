@@ -48,11 +48,18 @@ common common
     UndecidableInstances
     ViewPatterns
 
+Flag examples
+  Description: Enable examples build
+  Default:     False
+  Manual:      True
+
 library
   import:           common
+  if flag(examples)
+    exposed-modules:
+      Web.Minion.Examples.Multipart
+      Web.Minion.Examples.ServerEvent
   exposed-modules:
-    Web.Minion.Examples.Multipart
-    Web.Minion.Examples.ServerEvent
     Web.Minion.Request.Multipart
     Web.Minion.Response.ServerEvent
 
@@ -75,6 +82,8 @@ library
 
 executable minion-wai-extra-server-event-example
   import:           common
+  if !flag(examples)
+    Buildable: False
   main-is:          ServerEvent.hs
   build-depends:
     , base
@@ -87,6 +96,8 @@ executable minion-wai-extra-server-event-example
 
 executable minion-wai-extra-multipart-example
   import:           common
+  if !flag(examples)
+    Buildable: False
   main-is:          Multipart.hs
   build-depends:
     , base

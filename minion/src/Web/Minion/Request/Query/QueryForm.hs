@@ -1,9 +1,10 @@
 module Web.Minion.Request.Query.QueryForm (QueryForm (..), queryParamsForm) where
 
-import Control.Monad ((>=>))
 import Control.Monad.Catch
-import Data.ByteString.Lazy qualified as Bytes.Lazy
+import Data.Bifunctor (Bifunctor (..))
 import Data.String.Conversions (ConvertibleStrings (..))
+import Data.Text.Encoding qualified as Text
+import GHC.IsList
 import Network.HTTP.Types qualified as Http
 import Network.Wai qualified as Http
 import Web.FormUrlEncoded
@@ -27,7 +28,8 @@ queryParamsForm ::
   ValueCombinator i (WithReq m (QueryForm r)) ts m
 queryParamsForm = Request \makeError req ->
   either (throwM . makeError req Http.status400 . convertString) (pure . QueryForm)
-    . (Http.urlDecodeForm >=> Http.fromForm)
-    . Bytes.Lazy.fromStrict
-    . Http.rawQueryString
+    . Http.fromForm
+    . fromList
+    . fmap (bimap Text.decodeUtf8 $ maybe mempty Text.decodeUtf8)
+    . Http.queryString
     $ req

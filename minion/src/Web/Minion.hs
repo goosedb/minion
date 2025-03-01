@@ -219,7 +219,7 @@ defaultMinionSettings :: (IO.MonadIO m, Exc.MonadCatch m) => MinionSettings m
 defaultMinionSettings =
   MinionSettings
     { notFound = pure (Wai.responseBuilder Http.status404 [] mempty)
-    , httpError = \ServerError{..} -> pure $ Wai.responseBuilder code headers (Bytes.Builder.fromLazyByteString body)
+    , httpError = \ServerError{..} -> pure $ Wai.responseBuilder status headers (Bytes.Builder.fromLazyByteString body)
     , errorBuilders = defaultErrorBuilders
     }
 
@@ -240,6 +240,6 @@ serveWithSettings :: (IO.MonadIO m, Exc.MonadCatch m) => MinionSettings m -> Rou
 serveWithSettings MinionSettings{..} router req resp =
   Exc.catches @[]
     (route errorBuilders (RoutingState (filter (not . Text.null) $ Http.pathInfo req)) RHNil router req resp)
-    [ Exc.Handler \NoMatch -> notFound >>= IO.liftIO . resp
+    [ Exc.Handler \(NoMatch e) -> maybe notFound httpError e >>= IO.liftIO . resp
     , Exc.Handler $ httpError >=> IO.liftIO . resp
     ]

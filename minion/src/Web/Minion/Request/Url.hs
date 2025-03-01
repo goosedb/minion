@@ -8,6 +8,7 @@ import Data.Text (Text)
 import Network.HTTP.Types qualified as Http
 import Web.HttpApiData (FromHttpApiData (parseUrlPiece), parseUrlPieces)
 import Web.Minion.Args.Internal
+import Web.Minion.Error (NoMatch (NoMatch))
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Router.Internal
 
@@ -28,7 +29,7 @@ capture =
   Capture @b
     ( \makeError ->
         either throwM pure
-          . first (makeError Http.status400 . convertString)
+          . first (NoMatch . Just . makeError Http.status400 . convertString)
           . parseUrlPiece
     )
 
@@ -49,7 +50,7 @@ captures =
   Captures @b
     \makeError ->
       either throwM pure
-        . first (makeError Http.status400 . convertString)
+        . first (NoMatch . Just . makeError Http.status400 . convertString)
         . parseUrlPieces
 
 {- | Could be omitted with `OverloadedStrings`

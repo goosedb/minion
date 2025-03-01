@@ -7,8 +7,9 @@ import Data.ByteString.Lazy qualified as Bytes.Lazy
 import Network.HTTP.Types qualified as Http
 import Network.Wai qualified as Wai
 
-data NoMatch = NoMatch
-  deriving (Show, Exception)
+newtype NoMatch = NoMatch (Maybe ServerError)
+  deriving stock (Show)
+  deriving anyclass (Exception)
 
 type ErrorBuilder = Wai.Request -> Http.Status -> Bytes.Lazy.ByteString -> ServerError
 
@@ -25,14 +26,17 @@ data ErrorBuilders = ErrorBuilders
   }
 
 data ServerError = ServerError
-  { code :: Http.Status
+  { status :: Http.Status
   , headers :: [Http.Header]
   , body :: Bytes.Lazy.ByteString
   }
   deriving (Show, Exception)
 
-codeOf :: ServerError -> Http.Status
-codeOf ServerError{..} = code
+statusOf :: ServerError -> Http.Status
+statusOf ServerError{..} = status
+
+codeOf :: ServerError -> Int
+codeOf ServerError{..} = Http.statusCode status
 
 redirect :: (MonadThrow m) => Bytes.ByteString -> m a
 redirect url = throwM $ found{headers = [("Location", url)]}

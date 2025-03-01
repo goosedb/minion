@@ -48,11 +48,20 @@ common common
     UndecidableInstances
     ViewPatterns
 
+Flag examples
+  Description: Enable examples build
+  Default:     False
+  Manual:      True
+
+
 library
   import:           common
+  if flag(examples)
+    exposed-modules:
+      Web.Minion.Examples.Conduit.UpperCase
+
   exposed-modules:
     Web.Minion.Conduit
-    Web.Minion.Examples.Conduit.UpperCase
     Web.Minion.Request.Conduit
     Web.Minion.Response.Conduit
 
@@ -71,6 +80,8 @@ library
 
 executable minion-conduit-example
   import:           common
+  if !flag(examples)
+    Buildable: False
   main-is:          UpperCase.hs
   build-depends:
     , base

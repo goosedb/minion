@@ -47,3 +47,6 @@ decodeQueryParam = parseQueryParam . Text.Encoding.decodeUtf8
 
 filterNothings :: Nel.NonEmpty (Maybe a) -> Maybe (Nel.NonEmpty a)
 filterNothings = Nel.nonEmpty . catMaybes . Nel.toList
+
+parseQueryFlag :: Bytes.ByteString -> Bool
+parseQueryFlag = flip (elem @[]) ["1", "true", ""]
