@@ -44,7 +44,7 @@ module Web.Minion (
 
   -- ** Handler
   handle,
-  handleNT,
+  handlePP,
   handleJson,
   handlePlainText,
   RespBody (..),
@@ -188,22 +188,22 @@ handle ::
   Http.Method ->
   (DelayedArgs st ~> m o) ->
   Router' i ts m
-handle = handleNT @o @m @m id
+handle = handlePP @o @o @m @m id
 
-{-# INLINE handleNT #-}
-handleNT ::
-  forall o n m ts i st.
+{-# INLINE handlePP #-}
+handlePP ::
+  forall a o n m ts i st.
   ( HandleArgs ts st m
   , ToResponse m o
   , CanRespond o
   , I.Introspection i I.Response o
   ) =>
-  -- | natural transformation
-  (n o -> m o) ->
+  -- | post process
+  (n a -> m o) ->
   Http.Method ->
-  (DelayedArgs st ~> n o) ->
+  (DelayedArgs st ~> n a) ->
   Router' i ts m
-handleNT nt method f = Handle @o method (nt . apply f)
+handlePP nt method f = Handle @o method (nt . apply f)
 
 
 -- | Add description for route
