@@ -44,6 +44,7 @@ module Web.Minion (
 
   -- ** Handler
   handle,
+  handleNT,
   handleJson,
   handlePlainText,
   RespBody (..),
