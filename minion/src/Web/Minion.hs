@@ -187,7 +187,23 @@ handle ::
   Http.Method ->
   (DelayedArgs st ~> m o) ->
   Router' i ts m
-handle method f = Handle @o method (apply f)
+handle = handleNT @o @m @m id
+
+{-# INLINE handleNT #-}
+handleNT ::
+  forall o n m ts i st.
+  ( HandleArgs ts st m
+  , ToResponse m o
+  , CanRespond o
+  , I.Introspection i I.Response o
+  ) =>
+  -- | natural transformation
+  (n o -> m o) ->
+  Http.Method ->
+  (DelayedArgs st ~> n o) ->
+  Router' i ts m
+handleNT nt method f = Handle @o method (nt . apply f)
+
 
 -- | Add description for route
 description :: (I.Introspection i I.Description a) => a -> Combinator i ts m
