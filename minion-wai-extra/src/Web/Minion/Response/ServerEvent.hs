@@ -15,8 +15,10 @@ import Control.Exception (SomeException)
 import Data.Maybe (isJust)
 import GHC.IO (catchException)
 import Network.HTTP.Media
+import Data.List.NonEmpty (NonEmpty)
+import Control.Monad (forM_)
 
-data EventSource a = EventSource {poll :: IO a, after :: Maybe SomeException -> IO ()}
+data EventSource a = EventSource {poll :: IO (NonEmpty a), after :: Maybe SomeException -> IO ()}
 
 class ToServerEvent a where
   toServerEvent :: a -> Wai.ServerEvent
@@ -39,8 +41,9 @@ instance (Monad m, ToServerEvent a) => ToResponse m (EventSource a) where
       \write flush -> catchException
         do
           flush >> fix \continue -> do
-            event <- poll
-            case Wai.eventToBuilder $ toServerEvent event of
+            events <- poll
+            forM_ (Wai.eventToBuilder . toServerEvent <$> events) \case
               Nothing -> after Nothing
-              Just e -> write e >> flush >> continue
+              Just e -> write e
+            flush >> continue
         do after . Just
