@@ -35,8 +35,10 @@ api = "api" /> "sse" /> handle GET sse
 sse :: ReaderT (Chan String) IO (EventSource ServerEvent)
 sse = do
   chan <- ask
-  pure $ EventSource do
-    ServerEvent (Just $ Binary.putStringUtf8 "typed_string") Nothing
-      . pure
-      . Binary.putStringUtf8
-      <$> readChan chan
+  pure $ EventSource
+    do
+      ServerEvent (Just $ Binary.putStringUtf8 "typed_string") Nothing
+        . pure
+        . Binary.putStringUtf8
+        <$> readChan chan
+    do \_ -> putStrLn "Client has been disconnected"

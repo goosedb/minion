@@ -14,27 +14,26 @@ import Web.Minion.Router (Router' (..), ValueCombinator)
 hxRequest :: (MonadThrow m, I.Introspection i I.Header Bool) => ValueCombinator i (WithHeader Required Strict m Bool) ts m
 hxRequest = Header @Bool @Required @Strict "HX-Request" \_ -> bool (throwM NoMatch) (pure True) . ("true" `elem`)
 
-hxTarget :: forall presence m i ts.
+hxTarget ::
+  forall presence m i ts.
   (I.Introspection i I.Header Text, MonadThrow m, HeaderStrict presence) =>
   ValueCombinator i (WithHeader presence Strict m Text) ts m
 hxTarget = header @presence "HX-Target" (const $ pure . Text.Encode.decodeUtf8 . Nel.head)
 
-
-hxTrigger :: forall presence m i ts.
+hxTrigger ::
+  forall presence m i ts.
   (I.Introspection i I.Header Text, MonadThrow m, HeaderStrict presence) =>
   ValueCombinator i (WithHeader presence Strict m Text) ts m
 hxTrigger = header @presence "HX-Trigger" (const $ pure . Text.Encode.decodeUtf8 . Nel.head)
 
-
-hxTriggerName :: forall presence m i ts.
+hxTriggerName ::
+  forall presence m i ts.
   (I.Introspection i I.Header Text, MonadThrow m, HeaderStrict presence) =>
   ValueCombinator i (WithHeader presence Strict m Text) ts m
 hxTriggerName = header @presence "HX-Trigger-Name" (const $ pure . Text.Encode.decodeUtf8 . Nel.head)
 
-
-
-
-hxCurrentUrl'  :: forall presence m i ts.
+hxCurrentUrl' ::
+  forall presence m i ts.
   (I.Introspection i I.Header Text, MonadThrow m, HeaderStrict presence) =>
   ValueCombinator i (WithHeader presence Strict m Text) ts m
 hxCurrentUrl' = header @presence "HX-Current-URL" (const $ pure . Text.Encode.decodeUtf8 . Nel.head)

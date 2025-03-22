@@ -48,24 +48,25 @@ import Network.HTTP.Types qualified as Http
 import Network.Wai (responseStatus)
 import Network.Wai qualified as Wai
 import Network.Wai.Internal qualified as Wai.Internal
-import Test.Hspec
-    ( HasCallStack,
-      hspec,
-      describe,
-      it,
-      shouldSatisfy,
-      Spec,
-      SpecWith,
-      Expectation )
+import Test.Hspec (
+  Expectation,
+  HasCallStack,
+  Spec,
+  SpecWith,
+  describe,
+  hspec,
+  it,
+  shouldSatisfy,
+ )
 import Text.Read (readEither, readMaybe)
 import Web.FormUrlEncoded
 import Web.Minion
 import Web.Minion qualified as Minion
 import Web.Minion.Json
-import Web.Minion.Media ( ContentType(..) )
+import Web.Minion.Media (ContentType (..))
 import Web.Minion.Media.FormUrlEncoded
-import Web.Minion.Media.PlainText ( PlainText )
-import Web.Minion.Request.Body ( Decode(..) )
+import Web.Minion.Media.PlainText (PlainText)
+import Web.Minion.Request.Body (Decode (..))
 
 compile :: Minion.Router Void IO -> IO (Wai.Request -> IO Wai.Response)
 compile r = do
@@ -381,7 +382,7 @@ capturesSpec = do
 
     withPath ["api", "foo", "bar", "baz"] get
       `sendTo` server
-      `responseShouldFailWithBody` \ShowResponse{..} ->  and @[] [status == Http.status400, body == "could not parse: `foo'"]
+      `responseShouldFailWithBody` \ShowResponse{..} -> and @[] [status == Http.status400, body == "could not parse: `foo'"]
 
 pathSpec :: Spec
 pathSpec = do
@@ -458,7 +459,7 @@ queryParamSpec = do
         `responseShouldFailWith` \ShowResponse{..} -> Http.status400 == status
 
   describe "optional" do
-    test "collect query" do 
+    test "collect query" do
       let server = root do
             "api" /> "query" /> queryParam @Optional @String "qux" .> queryParam @Optional @String "baz" .> handleJson @J.Value GET method
           method qux baz = pure $ J.object ["qux" .= qux, "baz" .= baz]

@@ -18,7 +18,7 @@ module Web.Minion.Args (
   RHList (..),
   (:+),
   GetByType (..),
-  apply
+  apply,
 ) where
 
 import Web.Minion.Args.Internal

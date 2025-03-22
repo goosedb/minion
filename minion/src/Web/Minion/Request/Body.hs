@@ -1,4 +1,4 @@
-module Web.Minion.Request.Body (DecodeBody(..), IsRequest(..), ReqBody(..), Decode(..), reqBody) where
+module Web.Minion.Request.Body (DecodeBody (..), IsRequest (..), ReqBody (..), Decode (..), reqBody) where
 
 import Control.Monad ((>=>))
 import Control.Monad.Catch

@@ -11,10 +11,12 @@ import Network.Wai.EventSource qualified as Wai
 import Network.Wai.EventSource.EventStream qualified as Wai
 import Web.Minion
 
+import Control.Exception (SomeException)
 import Data.Maybe (isJust)
+import GHC.IO (catchException)
 import Network.HTTP.Media
 
-newtype EventSource a = EventSource (IO a)
+data EventSource a = EventSource {poll :: IO a, after :: Maybe SomeException -> IO ()}
 
 class ToServerEvent a where
   toServerEvent :: a -> Wai.ServerEvent
@@ -30,13 +32,15 @@ instance CanRespond (EventSource a) where
   canRespond l = any (isJust . matchAccept [textEventStream]) l
 
 instance (Monad m, ToServerEvent a) => ToResponse m (EventSource a) where
-  toResponse _ (EventSource poll) = do
+  toResponse _ (EventSource poll after) = do
     pure $ Wai.responseStream
       Http.status200
       [(Http.hContentType, renderHeader textEventStream)]
-      \write flush ->
-        flush >> fix \continue -> do
-          event <- poll
-          case Wai.eventToBuilder $ toServerEvent event of
-            Nothing -> pure ()
-            Just e -> write e >> flush >> continue
+      \write flush -> catchException
+        do
+          flush >> fix \continue -> do
+            event <- poll
+            case Wai.eventToBuilder $ toServerEvent event of
+              Nothing -> after Nothing
+              Just e -> write e >> flush >> continue
+        do after . Just

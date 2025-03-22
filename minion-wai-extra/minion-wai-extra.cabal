@@ -50,7 +50,7 @@ common common
 
 Flag examples
   Description: Enable examples build
-  Default:     False
+  Default:     True
   Manual:      True
 
 library

@@ -205,7 +205,6 @@ handlePP ::
   Router' i ts m
 handlePP nt method f = Handle @o method (nt . apply f)
 
-
 -- | Add description for route
 description :: (I.Introspection i I.Description a) => a -> Combinator i ts m
 description = Description
