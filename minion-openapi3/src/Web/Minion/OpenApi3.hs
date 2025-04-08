@@ -1,11 +1,9 @@
 module Web.Minion.OpenApi3 (
-  OpenApi3Config (..),
   OpenApi3,
   AttachRequestSchema (..),
   IsOpenApi3Description (..),
   OpenApi3Description (..),
   ToResponses (..),
-  openapi3,
   generateOpenApi3,
   -- | Use these newtypes to implement instances for according auths/response bodies/request bodies
   -- We do not implement it for concrete types to avoid extra dependencies
@@ -26,8 +24,6 @@ import Web.Minion.Router
 import Control.Applicative ((<|>))
 import Control.Arrow ((>>>))
 import Control.Lens hiding (index)
-import Control.Monad.IO.Class (MonadIO)
-import Data.Bifunctor (Bifunctor (..))
 import Data.ByteString qualified as Bytes
 import Data.CaseInsensitive qualified as CI
 import Data.Data (Proxy (..))
@@ -42,22 +38,11 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Network.HTTP.Types (Status (..))
 import Network.HTTP.Types qualified as Http
-import Text.Blaze
-import Text.Blaze.Html.Renderer.Utf8 (renderHtml)
-import Web.HttpApiData (ToHttpApiData (..))
 import Web.Minion.Auth.Basic (Basic)
-import Web.Minion.Files (indexTemplate, ui)
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Media
-import Web.Minion.Response.Header qualified as Header
 import Web.Minion.Response.Status
 import Web.Minion.Response.Union
-import Web.Minion.Static
-
-data OpenApi3Config = OpenApi3Config
-  { openapi3File :: !FilePath
-  , staticDir :: !FilePath
-  }
 
 data OpenApi3
 
@@ -300,36 +285,6 @@ instance (ToResponses a, IsStatus status) => ToResponses (WithStatus status a) w
 
 class ToResponses a where
   toResponses :: (Responses, Definitions Schema)
-
-openapi3 ::
-  forall m ts st.
-  (HandleArgs ts st m, MonadIO m) =>
-  OpenApi3Config ->
-  Router' OpenApi3 ts m ->
-  Router' Void Void m
-openapi3 OpenApi3Config{..} r =
-  [ Piece (Text.pack openapi3File) /> handleJson GET (pure $ generateOpenApi3 r)
-  , Piece (Text.pack staticDir)
-      /> [ "index.html" /> getIndex
-         , staticFiles defaultExtsMap ui'
-         , getIndex
-         ]
-  ]
- where
-  ui' = map (first (dropWhile (== '/'))) ui
-  getIndex = handle GET do
-    pure $
-      Header.AddHeaders
-        { headers = Header.AddHeader @"Content-Type" (Header.RawHeaderValue "text/html") :# HNil
-        , body = LazyBytes index
-        }
-
-  index =
-    indexTemplate
-      & Text.replace "SWAGGER_UI_SCHEMA" (toUrlPiece openapi3File)
-      & Text.replace "SWAGGER_UI_DIR" (toUrlPiece staticDir)
-      & preEscapedToMarkup
-      & renderHtml
 
 generateOpenApi3 :: forall m ts. Router' OpenApi3 ts m -> OpenApi
 generateOpenApi3 = \case

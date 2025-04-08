@@ -8,6 +8,7 @@ import Control.Monad.Trans.Reader
 import Data.Binary.Builder as Binary
 import Web.Minion
 import Web.Minion.Response.ServerEvent
+import qualified Data.List.NonEmpty as NonEmpty
 
 {- FOURMOLU_DISABLE -}
 -- The server accepts strings from the console and sends them to clients via SSE.
@@ -35,8 +36,11 @@ api = "api" /> "sse" /> handle GET sse
 sse :: ReaderT (Chan String) IO (EventSource ServerEvent)
 sse = do
   chan <- ask
-  pure $ EventSource do
-    ServerEvent (Just $ Binary.putStringUtf8 "typed_string") Nothing
-      . pure
-      . Binary.putStringUtf8
-      <$> readChan chan
+  pure $ EventSource
+    do
+      NonEmpty.singleton  
+        . ServerEvent (Just $ Binary.putStringUtf8 "typed_string") Nothing
+        . pure
+        . Binary.putStringUtf8
+        <$> readChan chan
+    do \_ -> putStrLn "Client has been disconnected"

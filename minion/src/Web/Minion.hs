@@ -44,6 +44,7 @@ module Web.Minion (
 
   -- ** Handler
   handle,
+  handlePP,
   handleJson,
   handlePlainText,
   RespBody (..),
@@ -187,7 +188,22 @@ handle ::
   Http.Method ->
   (DelayedArgs st ~> m o) ->
   Router' i ts m
-handle method f = Handle @o method (apply f)
+handle = handlePP @o @o @m @m id
+
+{-# INLINE handlePP #-}
+handlePP ::
+  forall a o n m ts i st.
+  ( HandleArgs ts st m
+  , ToResponse m o
+  , CanRespond o
+  , I.Introspection i I.Response o
+  ) =>
+  -- | post process
+  (n a -> m o) ->
+  Http.Method ->
+  (DelayedArgs st ~> n a) ->
+  Router' i ts m
+handlePP nt method f = Handle @o method (nt . apply f)
 
 -- | Add description for route
 description :: (I.Introspection i I.Description a) => a -> Combinator i ts m
@@ -219,7 +235,7 @@ defaultMinionSettings :: (IO.MonadIO m, Exc.MonadCatch m) => MinionSettings m
 defaultMinionSettings =
   MinionSettings
     { notFound = pure (Wai.responseBuilder Http.status404 [] mempty)
-    , httpError = \ServerError{..} -> pure $ Wai.responseBuilder code headers (Bytes.Builder.fromLazyByteString body)
+    , httpError = \ServerError{..} -> pure $ Wai.responseBuilder status headers (Bytes.Builder.fromLazyByteString body)
     , errorBuilders = defaultErrorBuilders
     }
 
@@ -240,6 +256,6 @@ serveWithSettings :: (IO.MonadIO m, Exc.MonadCatch m) => MinionSettings m -> Rou
 serveWithSettings MinionSettings{..} router req resp =
   Exc.catches @[]
     (route errorBuilders (RoutingState (filter (not . Text.null) $ Http.pathInfo req)) RHNil router req resp)
-    [ Exc.Handler \NoMatch -> notFound >>= IO.liftIO . resp
+    [ Exc.Handler \(NoMatch e) -> maybe notFound httpError e >>= IO.liftIO . resp
     , Exc.Handler $ httpError >=> IO.liftIO . resp
     ]

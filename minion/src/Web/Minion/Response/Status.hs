@@ -5,7 +5,7 @@ module Web.Minion.Response.Status where
 import Network.HTTP.Types
 import Network.HTTP.Types qualified as Http
 import Network.Wai qualified as Wai
-import Web.Minion
+import Web.Minion hiding (status)
 
 newtype WithStatus status a = WithStatus
   {body :: a}

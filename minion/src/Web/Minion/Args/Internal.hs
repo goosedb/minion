@@ -1,3 +1,4 @@
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
@@ -116,6 +117,7 @@ newtype WithPiece a = WithPiece a
 newtype WithPieces a = WithPieces [a]
 newtype WithReq m r = WithReq (m r)
 newtype Hide a = Hide a
+newtype Computed m a = Computed (m a)
 
 class Hidden m a where
   runHidden :: Hide a -> m ()
@@ -156,6 +158,14 @@ instance FunArgs '[] where
   {-# INLINE apply #-}
   apply a _ = a
 
+instance (RunDelayed as m) => RunDelayed (Computed m a ': as) m where
+  type DelayedArgs (Computed m a ': as) = a ': DelayedArgs as
+  {-# INLINE runDelayed #-}
+  runDelayed (Computed hIO :# as) = do
+    h <- hIO
+    rest <- runDelayed as
+    pure $ h :# rest
+
 instance (FunArgs as) => FunArgs (a ': as) where
   type (a ': as) ~> r = a -> as ~> r
   {-# INLINE apply #-}
@@ -168,6 +178,7 @@ class (Monad m) => RunDelayed ts m where
 instance (Monad m) => RunDelayed '[] m where
   type DelayedArgs '[] = '[]
   {-# INLINE runDelayed #-}
+  runDelayed :: (Monad m) => HList '[] -> m (HList (DelayedArgs '[]))
   runDelayed HNil = pure HNil
 
 instance (RunDelayed as m) => RunDelayed (WithHeader required lenient m a ': as) m where

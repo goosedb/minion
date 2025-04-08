@@ -9,7 +9,7 @@ import Data.Text.Encoding qualified as Text.Encoding
 import Data.Text.IO qualified
 import GHC.Generics (Generic)
 import Network.HTTP.Media
-import Web.Minion
+import Web.Minion hiding (queryParams)
 import Web.Minion.Auth.Basic
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Media
@@ -85,9 +85,9 @@ api = "api" /> myAuth .> ["post" /> postApi, "comments" /> commentsApi, "images"
   commentsApi =
     description "Comments api"
       /> [
-           [ queryParam' @PostId "postId"
-              .> queryParam @Size "size"
-              .> queryParam @Page "page"
+           [ queryParam @Required @PostId "postId"
+              .> queryParam @Required @Size "size"
+              .> queryParam @Required @Page "page"
               .> description "Get comments for post"
               /> handleJson @[Text] GET undefined
            , capture @CommentId "commentId"

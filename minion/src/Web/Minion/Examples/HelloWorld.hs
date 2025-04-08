@@ -1,6 +1,3 @@
-{-# LANGUAGE OverloadedLists #-}
-{-# LANGUAGE OverloadedStrings #-}
-
 module Web.Minion.Examples.HelloWorld (app) where
 
 import Web.Minion
