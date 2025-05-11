@@ -10,10 +10,10 @@ app = serve api
 api :: Router Void IO
 api =
   [ hideIntrospection publicApi
-  , "openapi" /> openapi3 config publicApi
+  , openapi3 config publicApi
   ]
  where
-  config = OpenApi3Config "openapi3.json" "static"
+  config = OpenApi3Config "openapi" "openapi3.json" "static"
 
 publicApi :: Router' OpenApi3 Void IO
 publicApi =
@@ -21,5 +21,5 @@ publicApi =
     /> description (TagText "public")
     /> "hello"
     /> description (DescriptionText "Greets user")
-    /> queryParam' @String "name"
+    /> queryParam @Required @String "name"
     .> handlePlainText @String GET (\name -> pure $ "Hello, " <> name <> "!")

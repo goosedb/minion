@@ -21,7 +21,8 @@ import Web.Minion.Response.Header qualified as Header
 import Web.Minion.Static
 
 data OpenApi3Config = OpenApi3Config
-  { openapi3File :: FilePath
+  { routePrefix :: String
+  , openapi3File :: FilePath
   , staticDir :: FilePath
   }
 
@@ -31,12 +32,14 @@ openapi3 ::
   OpenApi3Config ->
   Router' OpenApi3 ts m ->
   Router' Void Void m
-openapi3 OpenApi3Config{..} r =
-  [ handle @NoBody GET (liftIO $ redirect $ Text.Encoding.encodeUtf8 $ Text.pack $ staticDir <> "/" <> index_html)
+openapi3 OpenApi3Config{..} r = fromString routePrefix />
+  [ handle @NoBody GET (liftIO $ redirect indexHtmlPath)
   , fromString openapi3File /> handleJson GET (pure $ generateOpenApi3 r)
   , fromString staticDir /> [staticFiles defaultExtsMap ui', index_html /> getIndex]
   ]
  where
+  indexHtmlPath = Text.Encoding.encodeUtf8 $ Text.pack $ routePrefix <> "/" <> staticDir <> "/" <> index_html
+
   index_html :: (IsString s) => s
   index_html = "index.html"
   ui' = map (first (dropWhile (== '/'))) ui
@@ -47,7 +50,7 @@ openapi3 OpenApi3Config{..} r =
         , body = LazyBytes index
         }
 
-  index =
+  index = 
     indexTemplate
       & Text.replace "SWAGGER_UI_SCHEMA" (toUrlPiece openapi3File)
       & Text.replace "SWAGGER_UI_DIR" (toUrlPiece staticDir)

@@ -6,7 +6,7 @@ import Data.IORef (IORef, newIORef, readIORef)
 import Data.List (elemIndex)
 import Web.Minion
 import Web.Minion.Auth.Basic
-import Web.Minion.Error (codeOf, unauthorized)
+import Web.Minion.Error (unauthorized, statusOf)
 
 type Env = IORef [BasicAuth]
 type M = ReaderT Env IO
@@ -44,4 +44,4 @@ myAuth :: ValueCombinator Void (WithReq M (Auth '[Basic] UserId)) ts M
 myAuth = auth @'[Basic] @UserId (pure basicAuthSettings) \makeError -> \case
   _ -> do
     liftIO $ putStrLn "Unauthozied!"
-    throwM $ makeError (codeOf unauthorized) mempty
+    throwM $ makeError (statusOf unauthorized) mempty
