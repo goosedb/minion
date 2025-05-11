@@ -14,11 +14,15 @@ import Network.Wai qualified as Wai
 
 import Control.Exception qualified as IOExc
 import Control.Monad.Catch qualified as Exc
+import Data.ByteString qualified as Bytes
 import Data.ByteString.Lazy qualified as Bytes.Lazy
 import Data.Kind (Type)
+import Data.List (sortOn)
 import Data.List.NonEmpty (NonEmpty)
 import Data.List.NonEmpty qualified as Nel
+import Data.Maybe (fromMaybe)
 import Data.Void (Void)
+import GHC.Generics (Generic)
 import Web.Minion.Args.Internal (
   Arg,
   FunArgs (apply, type (~>)),
@@ -56,6 +60,26 @@ type MakeError = Http.Status -> Bytes.Lazy.ByteString -> ServerError
 
 type ValueCombinator i v ts m = Router' i (ts :+ v) m -> Router' i ts m
 type Combinator i ts m = Router' i ts m -> Router' i ts m
+
+data MatchedPiece
+  = StaticPiece {matchedPiece :: Text}
+  | DynamicPiece {matchedPiece :: Text, placeholder :: Text}
+  | DynamicPieces {matchedPieces :: [Text], placeholder :: Text}
+  deriving (Eq, Ord, Show, Generic)
+
+data MatchedHeader = MatchedHeader {headerName :: Http.HeaderName, headerValues :: [Bytes.ByteString]}
+  deriving (Eq, Ord, Show, Generic)
+
+data MatchedQuery = MatchedQuery {queryKey :: Bytes.ByteString, queryValues :: [Bytes.ByteString]}
+  deriving (Eq, Ord, Show, Generic)
+
+data MatchedData = MatchedData
+  { path :: [MatchedPiece]
+  , headers :: [MatchedHeader]
+  , query :: [MatchedQuery]
+  , method :: Http.Method
+  }
+  deriving (Eq, Ord, Show, Generic)
 
 data Router' i (ts :: Type) m where
   Piece ::
@@ -145,55 +169,65 @@ data Router' i (ts :: Type) m where
 route ::
   forall m ts i.
   (IO.MonadIO m, Exc.MonadCatch m) =>
+  (forall a. MatchedData -> m a -> m a) ->
   ErrorBuilders ->
   RoutingState ->
   RHList ts ->
   Router' i ts m ->
   ApplicationM m
-route builders state args (Alt routes) = \req resp -> goThrough (NoMatch Nothing) $ map (\r -> route builders state args r req resp) routes
-route builders state args (Middleware mw r) = mw (route builders state args r)
-route builders state args (MapArgs f r) = route builders state (f args) r
-route builders state args (Description _ r) = route builders state args r
-route builders state args (HideIntrospection r) = route builders state args r
-route _ RoutingState{..} args (Handle @o method f) = routeHandle path args method f
-route builders@ErrorBuilders{..} state args (Request @f get r) = \req resp -> do
-  route builders state (WithReq (get bodyErrorBuilder req) :#! args) r req resp
-route builders@ErrorBuilders{..} state args (Header @a @presence @parsing headerName get r) = \req ->
-  let header = lookupHeader req headerName
-      withHeader = WithHeader (get (headerErrorBuilder req) header) :#! args
-   in route builders state withHeader r req
-route builders@ErrorBuilders{..} state args (QueryParam @a @presence @parsing queryParamName parse r) = \req ->
-  let mbQueryParamVal = Nel.nonEmpty $ map snd $ filter ((queryParamName ==) . fst) $ Http.queryString req
-      withQueryParam = WithQueryParam (parse (queryParamsErrorBuilder req) mbQueryParamVal) :#! args
-   in route builders state withQueryParam r req
-route builders RoutingState{..} args (Piece txt r) = case path of
-  (t : ts) | txt == t -> route builders RoutingState{path = ts, ..} args r
-  _ -> \_ _ -> throwMIO (NoMatch Nothing)
-route builders@ErrorBuilders{..} RoutingState{..} args (Captures parse _ r) = \req resp -> do
-  parsed <- parse (captureErrorBuilder req) path
-  route builders RoutingState{path = [], ..} (WithPieces parsed :#! args) r req resp
-route builders@ErrorBuilders{..} RoutingState{..} args (Capture parse _ r) = \req resp -> case path of
-  (t : ts) -> do
-    v <- parse (captureErrorBuilder req) t
-    route builders RoutingState{path = ts, ..} (WithPiece v :#! args) r req resp
-  _ -> throwMIO (NoMatch Nothing)
+route withMatchedData ErrorBuilders{..} = go
+ where
+  {-# INLINE go #-}
+  go :: forall ts' i'. (IO.MonadIO m, Exc.MonadCatch m) => RoutingState -> RHList ts' -> Router' i' ts' m -> ApplicationM m
+  go state@RoutingState{..} args =
+    \case
+      Alt routes -> \req resp -> goThrough (NoMatch Nothing) $ map (\r -> go state args r req resp) routes
+      Middleware mw r -> mw (go state args r)
+      MapArgs f r -> go state (f args) r
+      Description _ r -> go state args r
+      HideIntrospection r -> go state args r
+      Handle @o method f -> routeHandle withMatchedData state args method f
+      Request @f get r -> \req resp -> go state (WithReq (get bodyErrorBuilder req) :#! args) r req resp
+      Header @a @presence @parsing headerName get r -> \req ->
+        let header = lookupHeader req headerName
+            withHeader = WithHeader (get (headerErrorBuilder req) header) :#! args
+         in go RoutingState{matchedHeaders = MatchedHeader headerName header : matchedHeaders, ..} withHeader r req
+      QueryParam @a @presence @parsing queryParamName parse r -> \req ->
+        let mbQueryParamVal = Nel.nonEmpty $ map snd $ filter ((queryParamName ==) . fst) $ Http.queryString req
+            rawVals = map (fromMaybe "") $ Nel.toList $ fromMaybe [] mbQueryParamVal
+            withQueryParam = WithQueryParam (parse (queryParamsErrorBuilder req) mbQueryParamVal) :#! args
+         in go RoutingState{matchedQuery = MatchedQuery queryParamName rawVals : matchedQuery, ..} withQueryParam r req
+      Piece txt r -> case path of
+        (t : ts) | txt == t -> go RoutingState{path = ts, matchedPath = StaticPiece txt : matchedPath, ..} args r
+        _ -> \_ _ -> throwMIO (NoMatch Nothing)
+      Captures parse name r -> \req resp -> do
+        parsed <- parse (captureErrorBuilder req) path
+        go RoutingState{path = [], matchedPath = DynamicPieces path name : matchedPath, ..} (WithPieces parsed :#! args) r req resp
+      Capture parse name r -> \req resp -> case path of
+        (t : ts) -> do
+          v <- parse (captureErrorBuilder req) t
+          go RoutingState{path = ts, matchedPath = DynamicPiece t name : matchedPath, ..} (WithPiece v :#! args) r req resp
+        _ -> throwMIO (NoMatch Nothing)
 
 {-# INLINE routeHandle #-}
 routeHandle ::
   forall m o ts st.
   (IO.MonadIO m, ToResponse m o, CanRespond o, HandleArgs ts st m) =>
-  [Text] ->
+  (forall a. MatchedData -> m a -> m a) ->
+  RoutingState ->
   RHList ts ->
   Http.Method ->
   (HList (DelayedArgs st) -> m o) ->
   ApplicationM m
-routeHandle path args method f req resp = do
+routeHandle withMatchedData RoutingState{..} args method f req resp = do
   checkHandler req path method
   let acceptHeader = lookupHeader req Http.hAccept
   if canRespond @o acceptHeader
     then do
+      let matched = MatchedData{path = reverse matchedPath, headers = matchedHeaders, query = matchedQuery, method}
       args' <- runDelayed (reverseHList (revHListToList args))
-      f args' >>= (toResponse @m @o acceptHeader >=> IO.liftIO . resp)
+      withMatchedData matched do
+        f args' >>= (toResponse @m @o acceptHeader >=> IO.liftIO . resp)
     else IO.liftIO $ resp $ Wai.responseBuilder Http.status406 [] mempty
 
 {-# INLINE goThrough #-}
@@ -222,7 +256,13 @@ lookupHeader req hn = map snd . filter ((hn ==) . fst) $ Http.requestHeaders req
 
 instance IsList (Router' i ts r) where
   type Item (Router' i ts r) = Router' i ts r
-  fromList = Alt
+  fromList = Alt . sortOn weight
+   where
+    weight :: Router' a b c -> Int
+    weight = \case
+      Capture{} -> 1
+      Captures{} -> 1
+      _ -> 0
   toList a = [a]
 
 instance Semigroup (Router' i ts r) where
@@ -242,7 +282,12 @@ smartPiece (break (== '/') -> (a, as)) cont =
     then Piece (fromString a) cont
     else Piece (fromString a) (smartPiece (drop 1 as) cont)
 
-newtype RoutingState = RoutingState {path :: [Text]}
+data RoutingState = RoutingState
+  { path :: [Text]
+  , matchedPath :: [MatchedPiece]
+  , matchedQuery :: [MatchedQuery]
+  , matchedHeaders :: [MatchedHeader]
+  }
 
 -- | 'Wai.Application' lifted to `m`
 type ApplicationM m =

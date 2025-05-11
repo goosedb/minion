@@ -13,6 +13,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
@@ -23,6 +24,7 @@ import Control.Concurrent qualified as Conc
 import Control.Lens hiding ((.=), (.>))
 import Control.Monad ((>=>))
 import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Reader (MonadReader (ask, local), ReaderT (..))
 import Data.Aeson ((.=))
 import Data.Aeson qualified as J
 import Data.Aeson.Lens (key)
@@ -68,6 +70,7 @@ import Web.Minion.Media.FormUrlEncoded
 import Web.Minion.Media.PlainText (PlainText)
 import Web.Minion.Request.Body (Decode (..))
 
+{-# INLINE compile #-}
 compile :: Minion.Router Void IO -> IO (Wai.Request -> IO Wai.Response)
 compile r = do
   response <- Conc.newEmptyMVar
@@ -77,11 +80,24 @@ compile r = do
           pure Wai.Internal.ResponseReceived
   pure (compiled >=> const (Conc.readMVar response))
 
-root :: Minion.Router Void IO -> Minion.Router Void IO
+compileMD :: Minion.Router Void (ReaderT Minion.MatchedData IO) -> IO (Wai.Request -> IO Wai.Response)
+compileMD r = do
+  response <- Conc.newEmptyMVar
+  let compiled get = do
+        Minion.serveWithSettings Minion.defaultMinionSettings{Minion.withMatchedData = \d -> local (const d)} r get \resp -> do
+          Conc.putMVar response resp
+          pure Wai.Internal.ResponseReceived
+  pure \req -> runReaderT (compiled req) (Minion.MatchedData{path = [], headers = [], query = [], method = GET}) >>= const (Conc.readMVar response)
+
+root :: Minion.Router Void m -> Minion.Router Void m
 root = id
 
+{-# INLINE sendTo #-}
 sendTo :: Wai.Request -> Minion.Router Void IO -> IO Wai.Response
 sendTo req server = compile server >>= ($ req)
+
+sendToMD :: Wai.Request -> Minion.Router Void (ReaderT Minion.MatchedData IO) -> IO Wai.Response
+sendToMD req server = compileMD server >>= ($ req)
 
 sendToIO :: IO Wai.Request -> Minion.Router Void IO -> IO Wai.Response
 sendToIO req server = compile server >>= \s -> req >>= \r -> s r
@@ -132,6 +148,9 @@ withQueryParams qps get =
 
 withPath :: [Text] -> Wai.Request -> Wai.Request
 withPath path get = get{Wai.pathInfo = path}
+
+withHeader :: Http.Header -> Wai.Internal.Request -> Wai.Internal.Request
+withHeader header get = get{Wai.requestHeaders = header : Wai.requestHeaders get}
 
 withJsonBody :: (J.ToJSON a) => a -> Wai.Request -> IO Wai.Request
 withJsonBody v req = feed >>= \f -> pure $ Wai.setRequestBodyChunks f req
@@ -300,6 +319,21 @@ methodSpec = do
 
 captureSpec :: Spec
 captureSpec = do
+  test "static pieces have higher priority" do
+    let server =
+          root
+            /> "api"
+            /> [ capture @String "name" .> handlePlainText GET (\_ -> pure $ txt "dynamic")
+               , "John" /> handlePlainText GET (pure $ txt "static")
+               ]
+    withPath ["api", "Mary"] get
+      `sendTo` server
+      `responseShouldSatisfy` \ShowResponse{..} -> body == txt "dynamic"
+
+    withPath ["api", "John"] get
+      `sendTo` server
+      `responseShouldSatisfy` \ShowResponse{..} -> body == txt "static"
+
   test "fallback to next if parsing fail" do
     let server =
           root

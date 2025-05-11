@@ -12,11 +12,11 @@ import Network.Wai.EventSource.EventStream qualified as Wai
 import Web.Minion
 
 import Control.Exception (SomeException)
+import Control.Monad (forM_)
+import Data.List.NonEmpty (NonEmpty)
 import Data.Maybe (isJust)
 import GHC.IO (catchException)
 import Network.HTTP.Media
-import Data.List.NonEmpty (NonEmpty)
-import Control.Monad (forM_)
 
 data EventSource a = EventSource {poll :: IO (NonEmpty a), after :: Maybe SomeException -> IO ()}
 

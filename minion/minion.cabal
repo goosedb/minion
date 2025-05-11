@@ -134,9 +134,11 @@ test-suite test
   type:           exitcode-stdio-1.0
   main-is:        Spec.hs
   hs-source-dirs: test
+  ghc-options: -O2
   build-depends:
     , aeson
     , base
+    , mtl
     , bytestring
     , minion
     , text

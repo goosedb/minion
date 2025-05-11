@@ -1,4 +1,5 @@
 {-# LANGUAGE ImpredicativeTypes #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 
 module Web.Minion (
@@ -58,6 +59,10 @@ module Web.Minion (
   -- ** Server
   ApplicationM,
   MinionSettings (..),
+  MatchedData (..),
+  MatchedPiece (..),
+  MatchedHeader (..),
+  MatchedQuery (..),
   serve,
   serveWithSettings,
   defaultMinionSettings,
@@ -90,7 +95,6 @@ import Network.HTTP.Types qualified as Http
 import Network.Wai qualified as Http
 import Network.Wai qualified as Wai
 import Web.Minion.Args
-import Web.Minion.Args.Internal
 import Web.Minion.Auth
 import Web.Minion.Error (
   ErrorBuilders (..),
@@ -99,6 +103,7 @@ import Web.Minion.Error (
   SomethingWentWrong (..),
  )
 
+import GHC.Exts (IsList (..))
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Json (handleJson, reqJson)
 import Web.Minion.Raw
@@ -168,7 +173,7 @@ infixr 0 !>
 -}
 {-# INLINE alt #-}
 alt :: [Router' i ts r] -> Router' i ts r
-alt = Alt
+alt = fromList
 
 {- | Handles request with specified HTTP method
 
@@ -225,6 +230,7 @@ data MinionSettings m = MinionSettings
   { notFound :: m Wai.Response
   , httpError :: ServerError -> m Wai.Response
   , errorBuilders :: ErrorBuilders
+  , withMatchedData :: forall a. MatchedData -> m a -> m a
   }
 
 {-# INLINE serve #-}
@@ -237,6 +243,7 @@ defaultMinionSettings =
     { notFound = pure (Wai.responseBuilder Http.status404 [] mempty)
     , httpError = \ServerError{..} -> pure $ Wai.responseBuilder status headers (Bytes.Builder.fromLazyByteString body)
     , errorBuilders = defaultErrorBuilders
+    , withMatchedData = \_ x -> x
     }
 
 defaultErrorBuilders :: ErrorBuilders
@@ -255,7 +262,7 @@ defaultErrorBuilders =
 serveWithSettings :: (IO.MonadIO m, Exc.MonadCatch m) => MinionSettings m -> Router' i Void m -> ApplicationM m
 serveWithSettings MinionSettings{..} router req resp =
   Exc.catches @[]
-    (route errorBuilders (RoutingState (filter (not . Text.null) $ Http.pathInfo req)) RHNil router req resp)
+    (route withMatchedData errorBuilders (RoutingState (filter (not . Text.null) $ Http.pathInfo req) [] [] []) RHNil router req resp)
     [ Exc.Handler \(NoMatch e) -> maybe notFound httpError e >>= IO.liftIO . resp
     , Exc.Handler $ httpError >=> IO.liftIO . resp
     ]

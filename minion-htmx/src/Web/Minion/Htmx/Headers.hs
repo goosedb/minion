@@ -12,7 +12,7 @@ import Web.Minion.Router (Router' (..), ValueCombinator)
 
 -- | Matches only `HX-Request:true`. Otherwise throws 'NoMatch' that causes trying another route
 hxRequest :: (MonadThrow m, I.Introspection i I.Header Bool) => ValueCombinator i (WithHeader Required Strict m Bool) ts m
-hxRequest = Header @Bool @Required @Strict "HX-Request" \_ -> bool (throwM NoMatch) (pure True) . ("true" `elem`)
+hxRequest = Header @Bool @Required @Strict "HX-Request" \_ -> bool (throwM $ NoMatch Nothing) (pure True) . ("true" `elem`)
 
 hxTarget ::
   forall presence m i ts.

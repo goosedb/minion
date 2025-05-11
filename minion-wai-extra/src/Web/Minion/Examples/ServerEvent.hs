@@ -6,9 +6,9 @@ import Control.Concurrent (Chan, forkIO, newChan, readChan, writeChan)
 import Control.Monad (forever)
 import Control.Monad.Trans.Reader
 import Data.Binary.Builder as Binary
+import Data.List.NonEmpty qualified as NonEmpty
 import Web.Minion
 import Web.Minion.Response.ServerEvent
-import qualified Data.List.NonEmpty as NonEmpty
 
 {- FOURMOLU_DISABLE -}
 -- The server accepts strings from the console and sends them to clients via SSE.
@@ -38,7 +38,7 @@ sse = do
   chan <- ask
   pure $ EventSource
     do
-      NonEmpty.singleton  
+      NonEmpty.singleton
         . ServerEvent (Just $ Binary.putStringUtf8 "typed_string") Nothing
         . pure
         . Binary.putStringUtf8

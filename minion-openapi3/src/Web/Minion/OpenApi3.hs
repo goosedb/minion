@@ -18,7 +18,7 @@ module Web.Minion.OpenApi3 (
 ) where
 
 import Data.OpenApi hiding (Header (..))
-import Web.Minion hiding (description)
+import Web.Minion hiding (description, status)
 import Web.Minion.Router
 
 import Control.Applicative ((<|>))
