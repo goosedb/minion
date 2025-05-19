@@ -177,7 +177,7 @@ infixr 0 !>
 alt :: [Router' i ts r] -> Router' i ts r
 alt = fromList
 
--- | Way to andle raw 'Wai.Request' and respond with raw 'Wai.Response'. Unintrospectable
+-- | Way to handle raw 'Wai.Request' and respond with raw 'Wai.Response'. Unintrospectable
 raw :: forall ts st m i. (HandleArgs ts st m) => (Wai.Request -> DelayedArgs st ~> m Wai.Response) -> Router' i ts m
 raw f = Raw (apply . f)
 
