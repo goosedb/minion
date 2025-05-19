@@ -149,6 +149,13 @@ data Router' i (ts :: Type) m where
     Http.Method ->
     (HList (DelayedArgs st) -> m o) ->
     Router' i ts m
+  Raw ::
+    forall m ts i st.
+    ( HandleArgs ts st m
+    ) =>
+    -- | Handled
+    (Wai.Request -> HList (DelayedArgs st) -> m Wai.Response) ->
+    Router' i ts m
   Description ::
     (I.Introspection i I.Description desc) =>
     -- | .
@@ -187,6 +194,7 @@ route withMatchedData ErrorBuilders{..} = go
       Description _ r -> go state args r
       HideIntrospection r -> go state args r
       Handle @o method f -> routeHandle withMatchedData state args method f
+      Raw f -> routeRaw withMatchedData state args f
       Request @f get r -> \req resp -> go state (WithReq (get bodyErrorBuilder req) :#! args) r req resp
       Header @a @presence @parsing headerName get r -> \req ->
         let header = lookupHeader req headerName
@@ -208,6 +216,22 @@ route withMatchedData ErrorBuilders{..} = go
           v <- parse (captureErrorBuilder req) t
           go RoutingState{path = ts, matchedPath = DynamicPiece t name : matchedPath, ..} (WithPiece v :#! args) r req resp
         _ -> throwMIO (NoMatch Nothing)
+
+{-# INLINE routeRaw #-}
+routeRaw ::
+  forall m ts st.
+  (IO.MonadIO m, HandleArgs ts st m) =>
+  (forall a. MatchedData -> m a -> m a) ->
+  RoutingState ->
+  RHList ts ->
+  (Wai.Request -> HList (DelayedArgs st) -> m Wai.Response) ->
+  ApplicationM m
+routeRaw withMatchedData RoutingState{..} args f req resp = do
+  let method = Wai.requestMethod req
+  let matched = MatchedData{path = reverse matchedPath, headers = matchedHeaders, query = matchedQuery, method}
+  args' <- runDelayed (reverseHList (revHListToList args))
+  withMatchedData matched do
+    f req args' >>= IO.liftIO . resp
 
 {-# INLINE routeHandle #-}
 routeHandle ::

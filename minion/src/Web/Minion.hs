@@ -44,6 +44,7 @@ module Web.Minion (
   CanRespond (..),
 
   -- ** Handler
+  raw,
   handle,
   handlePP,
   handleJson,
@@ -103,6 +104,7 @@ import Web.Minion.Error (
   SomethingWentWrong (..),
  )
 
+import Control.Monad.Trans.Reader (ReaderT (..))
 import GHC.Exts (IsList (..))
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Json (handleJson, reqJson)
@@ -174,6 +176,10 @@ infixr 0 !>
 {-# INLINE alt #-}
 alt :: [Router' i ts r] -> Router' i ts r
 alt = fromList
+
+-- | Way to andle raw 'Wai.Request' and respond with raw 'Wai.Response'. Unintrospectable
+raw :: forall ts st m i. (HandleArgs ts st m) => (Wai.Request -> DelayedArgs st ~> m Wai.Response) -> Router' i ts m
+raw f = Raw (apply . f)
 
 {- | Handles request with specified HTTP method
 

@@ -6,7 +6,7 @@ import Data.IORef (IORef, newIORef, readIORef)
 import Data.List (elemIndex)
 import Web.Minion
 import Web.Minion.Auth.Basic
-import Web.Minion.Error (unauthorized, statusOf)
+import Web.Minion.Error (statusOf, unauthorized)
 
 type Env = IORef [BasicAuth]
 type M = ReaderT Env IO

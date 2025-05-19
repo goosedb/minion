@@ -323,6 +323,7 @@ generateOpenApi3 = \case
       mempty
         & paths . at "/" ?~ (mempty & method ?~ (mempty{_operationResponses = resp}))
         & components . schemas .~ defs
+  Raw _ -> mempty & paths . at "/" ?~ mempty
 
 openapi3QueryParam :: forall presence a. (IsRequired presence, ToParamSchema a) => Bytes.ByteString -> OpenApi -> OpenApi
 openapi3QueryParam bname = addParam param >>> addDefaultResponse400 tname
