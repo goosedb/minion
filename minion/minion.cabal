@@ -74,6 +74,7 @@ library
     Web.Minion.Auth.Basic
     Web.Minion.Error
     Web.Minion.Introspect
+    Web.Minion.Introspect.Internal
     Web.Minion.Json
     Web.Minion.Media
     Web.Minion.Media.FormUrlEncoded
@@ -134,25 +135,25 @@ test-suite test
   type:           exitcode-stdio-1.0
   main-is:        Spec.hs
   hs-source-dirs: test
-  ghc-options: -O2
+  ghc-options:    -O2
   build-depends:
     , aeson
     , base
-    , mtl
+    , binary
     , bytestring
-    , minion
-    , text
+    , case-insensitive
     , hspec
     , hspec-expectations
-    , wai
-    , warp
-    , http-types
     , http-api-data
     , http-media
-    , case-insensitive
-    , binary
-    , lens-aeson
+    , http-types
     , lens
+    , lens-aeson
+    , minion
+    , mtl
+    , text
+    , wai
+    , warp
 
 executable minion-introspection-example
   import:           common

@@ -5,8 +5,9 @@ module Web.Minion.OpenApi3 (
   OpenApi3Description (..),
   ToResponses (..),
   generateOpenApi3,
-  -- | Use these newtypes to implement instances for according auths/response bodies/request bodies
-  -- We do not implement it for concrete types to avoid extra dependencies
+  {- | Use these newtypes to implement instances for according auths/response bodies/request bodies
+  We do not implement it for concrete types to avoid extra dependencies
+  -}
   AsCookieJwt (..),
   AsJwt (..),
   AsHtml (..),
@@ -49,13 +50,14 @@ data OpenApi3
 class AttachRequestSchema a where
   attachRequestSchema :: OpenApi -> OpenApi
 
-type instance I.Introspection OpenApi3 I.QueryParam = ToParamSchema
-type instance I.Introspection OpenApi3 I.Capture = ToParamSchema
-type instance I.Introspection OpenApi3 I.Captures = ToParamSchema
-type instance I.Introspection OpenApi3 I.Header = ToParamSchema
-type instance I.Introspection OpenApi3 I.Request = AttachRequestSchema
-type instance I.Introspection OpenApi3 I.Response = ToResponses
-type instance I.Introspection OpenApi3 I.Description = IsOpenApi3Description
+instance I.HasIntrospection OpenApi3 where
+  type IntrospectionFor OpenApi3 I.QueryParam = ToParamSchema
+  type IntrospectionFor OpenApi3 I.Capture = ToParamSchema
+  type IntrospectionFor OpenApi3 I.Captures = ToParamSchema
+  type IntrospectionFor OpenApi3 I.Header = ToParamSchema
+  type IntrospectionFor OpenApi3 I.Request = AttachRequestSchema
+  type IntrospectionFor OpenApi3 I.Response = ToResponses
+  type IntrospectionFor OpenApi3 I.Description = IsOpenApi3Description
 
 class IsOpenApi3Description a where
   toOpenApi3Description :: a -> OpenApi3Description
@@ -64,6 +66,7 @@ instance IsOpenApi3Description OpenApi3Description where
   toOpenApi3Description = id
 
 data OpenApi3Description = DescriptionText Text | SummaryText Text | TagText Text
+  deriving (Eq, Ord, Show)
 
 instance (AttachSecuritySchemas as) => AttachRequestSchema (Auth as a) where
   attachRequestSchema = attachSecuritySchemas @as
@@ -276,8 +279,8 @@ instance (ToResponses a, IsStatus status) => ToResponses (WithStatus status a) w
                 mempty
                   & at code
                     .~ ( _responsesResponses ^. at code
-                          <|> listToMaybe (toList _responsesResponses)
-                          <|> _responsesDefault
+                           <|> listToMaybe (toList _responsesResponses)
+                           <|> _responsesDefault
                        )
             }
         , def
@@ -286,26 +289,29 @@ instance (ToResponses a, IsStatus status) => ToResponses (WithStatus status a) w
 class ToResponses a where
   toResponses :: (Responses, Definitions Schema)
 
-generateOpenApi3 :: forall m ts. Router' OpenApi3 ts m -> OpenApi
+generateOpenApi3 :: forall m i ts. (I.Elem OpenApi3 i) => Router' i ts m -> OpenApi
 generateOpenApi3 = \case
-  Capture @a _ pname r ->
+  Capture @a _ pname r -> wi @I.Capture @a do
     generateOpenApi3 r & openapi3Capture @a pname
-  Captures @a _ pname r ->
+  Captures @a _ pname r -> wi @I.Captures @a do
     generateOpenApi3 r & openapi3Capture @a pname
-  Header @a @presence hname _ r ->
+  Header @a @presence hname _ r -> wi @I.Header @a do
     generateOpenApi3 r & opeanapi3Header @presence @a hname
-  Request @r _ r -> generateOpenApi3 r & attachRequestSchema @r
+  Request @r _ r -> wi @I.Request @r do
+    generateOpenApi3 r & attachRequestSchema @r
   HideIntrospection _ -> mempty
   Piece path r -> prependPath (Text.unpack path) (generateOpenApi3 r)
   Middleware _ r -> generateOpenApi3 r
   Alt rs -> foldMap generateOpenApi3 rs
   MapArgs _ r -> generateOpenApi3 r
-  Description (toOpenApi3Description -> desc) r -> case desc of
-    DescriptionText txt -> generateOpenApi3 r & allOperations . description %~ (Just txt <>)
-    SummaryText txt -> generateOpenApi3 r & allOperations . summary %~ (Just txt <>)
-    TagText txt -> generateOpenApi3 r & allOperations . tags %~ InsOrdHashSet.insert txt
-  QueryParam @a @presence bname _ r -> generateOpenApi3 r & openapi3QueryParam @presence @a bname
-  Handle @o httpMethod _ ->
+  Description @desc anyDesc r -> wi @I.Description @desc do
+    case toOpenApi3Description anyDesc of
+      DescriptionText txt -> generateOpenApi3 r & allOperations . description %~ (Just txt <>)
+      SummaryText txt -> generateOpenApi3 r & allOperations . summary %~ (Just txt <>)
+      TagText txt -> generateOpenApi3 r & allOperations . tags %~ InsOrdHashSet.insert txt
+  QueryParam @a @presence bname _ r -> wi @I.QueryParam @a do
+    generateOpenApi3 r & openapi3QueryParam @presence @a bname
+  Handle @o httpMethod _ -> wi @I.Response @o do
     let
       method :: Lens' PathItem (Maybe Operation)
       method = case httpMethod of
@@ -324,6 +330,9 @@ generateOpenApi3 = \case
         & paths . at "/" ?~ (mempty & method ?~ (mempty{_operationResponses = resp}))
         & components . schemas .~ defs
   Raw _ -> mempty & paths . at "/" ?~ mempty
+ where
+  wi :: forall t x a. (I.Introspection i t x) => ((I.IntrospectionFor OpenApi3 t x) => a) -> a
+  wi = I.withIntrospection @OpenApi3 @i @t @x
 
 openapi3QueryParam :: forall presence a. (IsRequired presence, ToParamSchema a) => Bytes.ByteString -> OpenApi -> OpenApi
 openapi3QueryParam bname = addParam param >>> addDefaultResponse400 tname

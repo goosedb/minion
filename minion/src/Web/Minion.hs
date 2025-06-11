@@ -104,7 +104,6 @@ import Web.Minion.Error (
   SomethingWentWrong (..),
  )
 
-import Control.Monad.Trans.Reader (ReaderT (..))
 import GHC.Exts (IsList (..))
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Json (handleJson, reqJson)
@@ -217,7 +216,7 @@ handlePP ::
 handlePP nt method f = Handle @o method (nt . apply f)
 
 -- | Add description for route
-description :: (I.Introspection i I.Description a) => a -> Combinator i ts m
+description :: forall a i m ts. (I.Introspection i I.Description a) => a -> Combinator i ts m
 description = Description
 
 hideIntrospection :: Router' i ts m -> Router' i' ts m

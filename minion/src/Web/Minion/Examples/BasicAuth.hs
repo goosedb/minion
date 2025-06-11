@@ -40,7 +40,7 @@ basicAuthSettings =
     }
     :# HNil
 
-myAuth :: ValueCombinator Void (WithReq M (Auth '[Basic] UserId)) ts M
+myAuth :: ValueCombinator '[] (WithReq M (Auth '[Basic] UserId)) ts M
 myAuth = auth @'[Basic] @UserId (pure basicAuthSettings) \makeError -> \case
   _ -> do
     liftIO $ putStrLn "Unauthozied!"

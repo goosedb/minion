@@ -286,10 +286,10 @@ methodSpec = do
           /> [ "foo" /> "bar" /> handlePlainText GET (pure $ txt "/foo/bar get")
              , "foo" /> "bar" /> handlePlainText POST (pure $ txt "/foo/bar post")
              , "baz"
-                /> "qux"
-                /> [ handlePlainText GET (pure $ txt "/baz/qux get")
-                   , handlePlainText POST (pure $ txt "/baz/qux post")
-                   ]
+                 /> "qux"
+                 /> [ handlePlainText GET (pure $ txt "/baz/qux get")
+                    , handlePlainText POST (pure $ txt "/baz/qux post")
+                    ]
              ]
   test "find route with specified method" do
     withPath ["api", "foo", "bar"] get
@@ -425,10 +425,10 @@ pathSpec = do
         root
           [ "api"
               /> [ "aaa"
-                    /> "bbb"
-                    /> [ "ccc" /> "ddd" /> pt 1
-                       , "eee" /> pt 2
-                       ]
+                     /> "bbb"
+                     /> [ "ccc" /> "ddd" /> pt 1
+                        , "eee" /> pt 2
+                        ]
                  , "fff" /> "ggg" /> pt 3
                  ]
           , "internal" /> "zzz" /> pt 4

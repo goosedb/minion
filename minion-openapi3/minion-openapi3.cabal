@@ -19,10 +19,10 @@ extra-source-files:
   ui/*.js.map
   ui/*.png
 
-Flag examples
-  Description: Enable examples build
-  Default:     False
-  Manual:      True
+flag examples
+  description: Enable examples build
+  default:     False
+  manual:      True
 
 common common
   ghc-options:        -Wall
@@ -65,9 +65,9 @@ common common
 
 library
   import:           common
+
   if flag(examples)
-    exposed-modules:
-      Web.Minion.Examples.OpenApi3
+    exposed-modules: Web.Minion.Examples.OpenApi3
 
   exposed-modules:
     Web.Minion.OpenApi3
@@ -99,11 +99,12 @@ library
   hs-source-dirs:   src
   default-language: Haskell2010
 
-
 executable minion-openapi3-example
   import:           common
+
   if !flag(examples)
-    Buildable: False
+    buildable: False
+
   main-is:          OpenApi3.hs
   build-depends:
     , base

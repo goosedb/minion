@@ -21,7 +21,6 @@ import Data.List (sortOn)
 import Data.List.NonEmpty (NonEmpty)
 import Data.List.NonEmpty qualified as Nel
 import Data.Maybe (fromMaybe)
-import Data.Void (Void)
 import GHC.Generics (Generic)
 import Web.Minion.Args.Internal (
   Arg,
@@ -52,7 +51,7 @@ import Web.Minion.Request (IsRequest)
 import Web.Minion.Response (CanRespond (..), ToResponse (..))
 
 -- | If you don't care about introspection
-type Router = Router' Void
+type Router = Router' '[]
 
 type MiddlewareM m = ApplicationM m -> ApplicationM m
 
@@ -81,7 +80,7 @@ data MatchedData = MatchedData
   }
   deriving (Eq, Ord, Show, Generic)
 
-data Router' i (ts :: Type) m where
+data Router' (i :: [Type]) (ts :: Type) m where
   Piece ::
     -- | .
     Text ->
@@ -151,12 +150,12 @@ data Router' i (ts :: Type) m where
     Router' i ts m
   Raw ::
     forall m ts i st.
-    ( HandleArgs ts st m
-    ) =>
+    (HandleArgs ts st m) =>
     -- | Handled
     (Wai.Request -> HList (DelayedArgs st) -> m Wai.Response) ->
     Router' i ts m
   Description ::
+    forall desc i m ts.
     (I.Introspection i I.Description desc) =>
     -- | .
     desc ->

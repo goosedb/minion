@@ -15,7 +15,7 @@ api =
  where
   config = OpenApi3Config "openapi" "openapi3.json" "static"
 
-publicApi :: Router' OpenApi3 Void IO
+publicApi :: Router' '[OpenApi3] Void IO
 publicApi =
   "api/public"
     /> description (TagText "public")

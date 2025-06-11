@@ -13,7 +13,6 @@ import GHC.Generics (Generic)
 import Network.HTTP.Types.Status qualified as Http
 import System.Environment (getArgs)
 import Web.Minion
-
 import Web.Minion.Auth.Jwt
 
 type M = ReaderT Env IO
@@ -40,7 +39,7 @@ api = "api" /> "auth" /> myAuth .> handle GET authEndpoint
 authEndpoint :: UserId -> ReaderT Env IO NoBody
 authEndpoint userId = liftIO (putStrLn $ "User " <> show userId) $> NoBody
 
-myAuth :: ValueCombinator Void (WithReq M (Auth '[Bearer JwtUserInfo] UserId)) ts M
+myAuth :: ValueCombinator '[] (WithReq M (Auth '[Bearer JwtUserInfo] UserId)) ts M
 myAuth = auth @'[Bearer JwtUserInfo] @UserId (asks authCtx) \makeError -> \case
   _ -> throwM $ makeError Http.status401 mempty
 

@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               minion-wai-extra
-version:            0.1.0.0
+version:            0.2.0.0
 license:            MIT
 license-file:       LICENSE
 author:             goosedb
@@ -48,17 +48,19 @@ common common
     UndecidableInstances
     ViewPatterns
 
-Flag examples
-  Description: Enable examples build
-  Default:     True
-  Manual:      True
+flag examples
+  description: Enable examples build
+  default:     True
+  manual:      True
 
 library
   import:           common
+
   if flag(examples)
     exposed-modules:
       Web.Minion.Examples.Multipart
       Web.Minion.Examples.ServerEvent
+
   exposed-modules:
     Web.Minion.Request.Multipart
     Web.Minion.Response.ServerEvent
@@ -82,8 +84,10 @@ library
 
 executable minion-wai-extra-server-event-example
   import:           common
+
   if !flag(examples)
-    Buildable: False
+    buildable: False
+
   main-is:          ServerEvent.hs
   build-depends:
     , base
@@ -96,8 +100,10 @@ executable minion-wai-extra-server-event-example
 
 executable minion-wai-extra-multipart-example
   import:           common
+
   if !flag(examples)
-    Buildable: False
+    buildable: False
+
   main-is:          Multipart.hs
   build-depends:
     , base

@@ -16,6 +16,7 @@ import Text.Blaze.Html.Renderer.Utf8 (renderHtml)
 import Web.HttpApiData (ToHttpApiData (..))
 import Web.Minion.Error (redirect)
 import Web.Minion.Files (indexTemplate, ui)
+import Web.Minion.Introspect qualified as I
 import Web.Minion.OpenApi3
 import Web.Minion.Response.Header qualified as Header
 import Web.Minion.Static
@@ -27,11 +28,11 @@ data OpenApi3Config = OpenApi3Config
   }
 
 openapi3 ::
-  forall m ts st.
-  (HandleArgs ts st m, MonadIO m) =>
+  forall m ts st i.
+  (HandleArgs ts st m, MonadIO m, I.Elem OpenApi3 i) =>
   OpenApi3Config ->
-  Router' OpenApi3 ts m ->
-  Router' Void Void m
+  Router' i ts m ->
+  Router' '[] Void m
 openapi3 OpenApi3Config{..} r =
   fromString routePrefix
     /> [ handle @NoBody GET (liftIO $ redirect indexHtmlPath)
