@@ -1,6 +1,7 @@
 module Web.Minion.Introspect.Internal where
 
 import Data.Kind
+import Data.Typeable (Typeable)
 import Data.Void (Void)
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -37,7 +38,7 @@ class Introspection ii t x where
 instance (IntrospectionFor i t x, Introspection ii t x) => Introspection (i ': ii) t x where
   introspections = ErasedIntrospectionDictionary (IntrospectionDictionary @(IntrospectionFor i t x)) : introspections @ii @t @x
 
-instance Introspection '[] t x where
+instance (Typeable x) => Introspection '[] t x where
   introspections = []
 
 class Elem i ii where

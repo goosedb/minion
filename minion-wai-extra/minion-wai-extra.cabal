@@ -11,7 +11,7 @@ build-type:         Simple
 extra-source-files: README.md
 
 common common
-  ghc-options:        -Wall
+  ghc-options:        -Wall -Wunused-packages
   default-extensions:
     AllowAmbiguousTypes
     BlockArguments
@@ -69,11 +69,14 @@ library
     , base                >=4.16 && <5
     , binary
     , bytestring
+    , http-client
     , http-media
     , http-types
     , minion
     , resourcet
     , string-conversions
+    , streaming
+    , streaming-bytestring
     , text
     , transformers
     , wai
@@ -92,6 +95,9 @@ executable minion-wai-extra-server-event-example
   build-depends:
     , base
     , minion-wai-extra
+    , minion-client
+    , streaming
+    , minion
     , warp
 
   hs-source-dirs:   app

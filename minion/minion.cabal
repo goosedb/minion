@@ -12,7 +12,7 @@ extra-source-files:
   README.md
 
 common common
-  ghc-options:        -Wall
+  ghc-options:        -Wall -Wunused-packages
   default-extensions:
     AllowAmbiguousTypes
     BlockArguments
@@ -72,17 +72,22 @@ library
     Web.Minion.Args.Internal
     Web.Minion.Auth
     Web.Minion.Auth.Basic
+    Web.Minion.Client.Types
     Web.Minion.Error
     Web.Minion.Introspect
+    Web.Minion.Codec.Encode
+    Web.Minion.Response.Body.OctetStream 
+    Web.Minion.Media.OctetStream
     Web.Minion.Introspect.Internal
     Web.Minion.Json
     Web.Minion.Media
     Web.Minion.Media.FormUrlEncoded
     Web.Minion.Media.Json
     Web.Minion.Media.PlainText
-    Web.Minion.Raw
     Web.Minion.Request
     Web.Minion.Request.Body
+    Web.Minion.Codec.Decode
+    Web.Minion.Media.Html
     Web.Minion.Request.Body.FormUrlEncoded
     Web.Minion.Request.Body.Json
     Web.Minion.Request.Body.PlainText
@@ -92,11 +97,10 @@ library
     Web.Minion.Request.Method
     Web.Minion.Request.Query
     Web.Minion.Request.Query.Internal
-    Web.Minion.Request.Query.QueryFlag
-    Web.Minion.Request.Query.QueryFlag.Static
-    Web.Minion.Request.Query.QueryForm
-    Web.Minion.Request.Query.QueryParam
-    Web.Minion.Request.Query.QueryParams
+    Web.Minion.Request.Query.Flag
+    Web.Minion.Request.Query.Form
+    Web.Minion.Request.Query.Param
+    Web.Minion.Request.Query.Params
     Web.Minion.Request.Url
     Web.Minion.Response
     Web.Minion.Response.Body
@@ -120,12 +124,13 @@ library
     , exceptions
     , filepath
     , http-api-data
+    , http-client
     , http-media
     , http-types
-    , network-uri
     , string-conversions
     , text
     , transformers
+    , resourcet
     , wai
 
   hs-source-dirs:   src

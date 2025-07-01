@@ -25,7 +25,7 @@ flag examples
   manual:      True
 
 common common
-  ghc-options:        -Wall
+  ghc-options:        -Wall -Wunused-packages
   default-extensions:
     AllowAmbiguousTypes
     BlockArguments
@@ -78,15 +78,13 @@ library
     Web.Minion.Files
 
   build-depends:
-    , aeson
-    , base                       >=4.16 && <5
+      base                       >=4.16 && <5
     , blaze-html
     , blaze-markup
     , bytestring
     , case-insensitive
     , directory
     , file-embed-lzma
-    , filepath
     , http-api-data
     , http-types
     , insert-ordered-containers

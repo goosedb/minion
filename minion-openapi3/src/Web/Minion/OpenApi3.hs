@@ -22,26 +22,24 @@ import Data.OpenApi hiding (Header (..))
 import Web.Minion hiding (description, status)
 import Web.Minion.Router
 
-import Control.Applicative ((<|>))
 import Control.Arrow ((>>>))
 import Control.Lens hiding (index)
 import Data.ByteString qualified as Bytes
 import Data.CaseInsensitive qualified as CI
 import Data.Data (Proxy (..))
-import Data.Foldable (Foldable (..))
 import Data.HashMap.Strict.InsOrd qualified as HM
 import Data.HashMap.Strict.InsOrd qualified as InsOrdHashMap
 import Data.HashSet.InsOrd qualified as InsOrdHashSet
-import Data.Maybe (listToMaybe)
 import Data.OpenApi.Declare (runDeclare)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
-import Network.HTTP.Types (Status (..))
 import Network.HTTP.Types qualified as Http
 import Web.Minion.Auth.Basic (Basic)
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Media
+import Web.Minion.Response (Redirect)
+import Web.Minion.Response.Header (AddHeaders)
 import Web.Minion.Response.Status
 import Web.Minion.Response.Union
 
@@ -212,13 +210,13 @@ instance AttachRequestSchema (AsMultipart a) where
       (mempty :: RequestBody)
         & content .~ InsOrdHashMap.fromList [("multipart/form-data", mempty)]
 
-instance (ToSchema a, AllContentTypes cts) => ToResponses (RespBody cts a) where
+instance (ToSchema a, AllContentTypes cts, IsStatus status) => ToResponses (RespBody status cts a) where
   toResponses = (resps, defs)
    where
     (defs, ref) = runDeclare (declareSchemaRef (Proxy :: Proxy a)) mempty
     resps =
       Responses
-        { _responsesResponses = mempty & at 200 ?~ resp
+        { _responsesResponses = mempty & at (Http.statusCode $ httpStatus @status) ?~ resp
         , _responsesDefault = Nothing
         }
     resp =
@@ -231,34 +229,25 @@ instance (ToSchema a, AllContentTypes cts) => ToResponses (RespBody cts a) where
 
     responseContentTypes = allContentTypes @cts
 
-instance ToResponses NoBody where
+instance (IsStatus status) => ToResponses (NoBody status) where
   toResponses = (resps, mempty)
    where
     resps =
       Responses
-        { _responsesResponses = mempty & at 200 ?~ resp
+        { _responsesResponses = mempty & at (Http.statusCode $ httpStatus @status) ?~ resp
         , _responsesDefault = Nothing
         }
     resp = Inline mempty
 
-instance ToResponses LazyBytes where
+instance (IsStatus status) => ToResponses Redirect where
   toResponses = (resps, mempty)
    where
     resps =
       Responses
-        { _responsesResponses = mempty & at 200 ?~ resp
+        { _responsesResponses = mempty & at 302 ?~ resp
         , _responsesDefault = Nothing
         }
-    resp =
-      Inline
-        ( mempty
-            & content
-              .~ InsOrdHashMap.fromList
-                [("application/octet-stream", mempty)]
-        )
-
-instance ToResponses Chunks where
-  toResponses = toResponses @LazyBytes
+    resp = Inline mempty
 
 instance (ToResponses a, ToResponses (Union as)) => ToResponses (Union (a ': as)) where
   toResponses =
@@ -269,22 +258,11 @@ instance (ToResponses a, ToResponses (Union as)) => ToResponses (Union (a ': as)
 instance ToResponses (Union '[]) where
   toResponses = (mempty, mempty)
 
-instance (ToResponses a, IsStatus status) => ToResponses (WithStatus status a) where
-  toResponses =
-    let (Responses{..}, def) = toResponses @a
-        Status code _ = status @status
-     in ( Responses
-            { _responsesDefault = Nothing
-            , _responsesResponses =
-                mempty
-                  & at code
-                    .~ ( _responsesResponses ^. at code
-                           <|> listToMaybe (toList _responsesResponses)
-                           <|> _responsesDefault
-                       )
-            }
-        , def
-        )
+instance (ToResponses a) => ToResponses (AddHeaders '[] a) where
+  toResponses = toResponses @a
+
+instance (ToResponses a) => ToResponses (AddHeaders hs a) where
+  toResponses = toResponses @a
 
 class ToResponses a where
   toResponses :: (Responses, Definitions Schema)

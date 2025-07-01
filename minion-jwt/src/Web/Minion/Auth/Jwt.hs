@@ -11,9 +11,14 @@ import Data.ByteString.Lazy qualified as Bytes.Lazy
 import Data.Function ((&))
 import Data.Functor ((<&>))
 import Data.Time qualified as Time
+import Network.HTTP.Client qualified as Http
 import Network.HTTP.Types.Header qualified as Http
 import Network.Wai qualified as Wai
 import Web.Minion
+import Web.Minion.Client.Types (
+  ApplyAuth (..),
+  AuthParam,
+ )
 
 data JwtAuthSettings m payload a = JwtAuthSettings
   { getNow :: m Time.UTCTime
@@ -72,3 +77,10 @@ instance (MonadIO m, FromJSON payload) => IsAuth (Bearer payload) m a where
     prefix = "Bearer "
 
     hoistMaybe = MaybeT . pure
+
+newtype JwtToken = JwtToken Bytes.ByteString
+
+instance ApplyAuth (Bearer a) where
+  type AuthParam (Bearer a) = JwtToken
+  applyAuth (JwtToken token) req = pure do
+    req{Http.requestHeaders = (Http.hAuthorization, "Bearer " <> token) : Http.requestHeaders req}

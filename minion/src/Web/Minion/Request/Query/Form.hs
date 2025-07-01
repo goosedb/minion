@@ -1,4 +1,4 @@
-module Web.Minion.Request.Query.QueryForm (QueryForm (..), queryParamsForm) where
+module Web.Minion.Request.Query.Form (QueryForm (..), queryParamsForm) where
 
 import Control.Monad.Catch
 import Data.Bifunctor (Bifunctor (..))

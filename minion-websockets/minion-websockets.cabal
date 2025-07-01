@@ -1,0 +1,91 @@
+cabal-version:      3.0
+name:               minion-websockets
+version:            0.2.0.0
+license:            MIT
+license-file:       LICENSE
+author:             goosedb
+maintainer:         goosedb@yandex.ru
+category:           Web
+synopsis:           Websockets for minion
+build-type:         Simple
+extra-source-files: README.md
+
+common common
+  ghc-options:        -Wall -Wunused-packages
+  default-extensions:
+    AllowAmbiguousTypes
+    BlockArguments
+    ConstraintKinds
+    DataKinds
+    DefaultSignatures
+    DeriveAnyClass
+    DeriveGeneric
+    DerivingStrategies
+    DerivingStrategies
+    DuplicateRecordFields
+    DuplicateRecordFields
+    FlexibleContexts
+    FlexibleInstances
+    FunctionalDependencies
+    GADTs
+    GeneralizedNewtypeDeriving
+    ImportQualifiedPost
+    LambdaCase
+    MultiParamTypeClasses
+    NamedFieldPuns
+    OverloadedLists
+    OverloadedRecordDot
+    OverloadedRecordDot
+    OverloadedStrings
+    PolyKinds
+    RankNTypes
+    RecordWildCards
+    RoleAnnotations
+    ScopedTypeVariables
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    UndecidableInstances
+    ViewPatterns
+
+flag examples
+  description: Enable examples build
+  default:     True
+  manual:      True
+
+library
+  import:           common
+
+  if flag(examples)
+    exposed-modules: Web.Minion.Examples.Websocket
+
+  exposed-modules:
+    Web.Minion.Websocket
+    Web.Minion.Websocket.Internal
+
+  build-depends:
+    , base            >=4.16 && <5
+    , http-types
+    , minion
+    , wai
+    , wai-websockets
+    , websockets
+
+  hs-source-dirs:   src
+  default-language: Haskell2010
+
+executable minion-wai-extra-websocket-example
+  import:           common
+
+  if !flag(examples)
+    buildable: False
+
+  main-is:          Websocket.hs
+  build-depends:
+    , base
+    , minion-websockets
+    , warp
+
+  hs-source-dirs:   app
+  default-language: Haskell2010
+  ghc-options:      -threaded

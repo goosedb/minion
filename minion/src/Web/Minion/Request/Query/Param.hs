@@ -1,4 +1,4 @@
-module Web.Minion.Request.Query.QueryParam (
+module Web.Minion.Request.Query.Param (
   QueryParamStrict (..),
   QueryParamLenient (..),
 ) where

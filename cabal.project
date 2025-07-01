@@ -5,3 +5,5 @@ packages:
   minion-jwt
   minion-htmx
   minion-openapi3
+  minion-client
+  minion-websockets

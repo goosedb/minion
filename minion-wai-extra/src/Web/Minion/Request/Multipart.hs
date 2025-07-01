@@ -5,7 +5,10 @@ module Web.Minion.Request.Multipart (
   Tmp,
   Mem,
   MultipartData (..),
+  MultipartFile (..),
+  RawMultipartData (..),
   FromMultipart (..),
+  ToMultipart (..),
   MultipartM,
   getParam,
   lookupParam,
@@ -13,6 +16,7 @@ module Web.Minion.Request.Multipart (
   lookupFile,
   Wai.File,
   Wai.Param,
+  SendMultipart (..),
 ) where
 
 import Data.ByteString.Lazy qualified as Bytes.Lazy
@@ -25,11 +29,15 @@ import Control.Monad.Trans.Except (Except, except, runExcept)
 import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
 import Control.Monad.Trans.Resource
 import Data.ByteString qualified as Bytes
+import Data.Data (Typeable)
 import Data.String.Conversions (ConvertibleStrings (..))
 import Data.Text (Text)
 import Data.Text.Encoding qualified as Text.Encode
+import Network.HTTP.Client qualified as Http
+import Network.HTTP.Client.MultipartFormData qualified as Http
 import Network.HTTP.Types qualified as Http
 import Web.Minion.Args (WithReq)
+import Web.Minion.Client.Types (RequestClient (..))
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Request (IsRequest (..))
 import Web.Minion.Router
@@ -39,11 +47,15 @@ data Mem
 
 newtype Multipart backend a = Multipart a
 
+instance (Typeable a, Typeable backend, Typeable (Multipart backend a), SendMultipart backend, ToMultipart backend a) => RequestClient (Multipart backend a) where
+  type RequestFromClient (Multipart backend a) = a
+  packRequest a = sendMultipart (toMultipart @backend a)
+
 instance IsRequest (Multipart backend a) where
   type RequestValue (Multipart backend a) = a
   getRequestValue (Multipart a) = a
 
-type MultipartM backend = ReaderT (MultipartData backend) (Except Text)
+type MultipartM backend = ReaderT (RawMultipartData backend) (Except Text)
 
 class (MonadIO m) => Backend m backend where
   type BackendFile backend :: Type
@@ -58,15 +70,42 @@ instance (MonadIO m) => Backend m Mem where
   type BackendFile Mem = Bytes.Lazy.ByteString
   waiBackend = pure Wai.lbsBackEnd
 
-data MultipartData backend = MultipartData
-  { params :: [Wai.Param]
-  , files :: [Wai.File (BackendFile backend)]
+data RawMultipartData backend = RawMultipartData
+  { rawParams :: [Wai.Param]
+  , rawFiles :: [Wai.File (BackendFile backend)]
   }
+
+data MultipartData backend = MultipartData
+  { params :: [(Text, Bytes.ByteString)]
+  , files :: [(Text, MultipartFile backend)]
+  }
+
+data MultipartFile backend where
+  TmpMultipartFile :: FilePath -> MultipartFile Tmp
+  MemMultipartFile :: FilePath -> Bytes.Lazy.ByteString -> MultipartFile Mem
 
 class FromMultipart backend a where
   fromMultipart :: MultipartM backend a
 
-instance FromMultipart backend (MultipartData backend) where
+class ToMultipart backend a where
+  toMultipart :: a -> MultipartData backend
+
+class SendMultipart backend where
+  sendMultipart :: MultipartData backend -> Http.Request -> IO Http.Request
+
+instance SendMultipart Tmp where
+  sendMultipart MultipartData{..} = Http.formDataBody $ p <> f
+   where
+    p = map (uncurry Http.partBS) params
+    f = map (\(k, TmpMultipartFile filepath) -> Http.partFileSource k filepath) files
+
+instance SendMultipart Mem where
+  sendMultipart MultipartData{..} = Http.formDataBody $ p <> f
+   where
+    p = map (uncurry Http.partBS) params
+    f = map (\(k, MemMultipartFile fileName fileContent) -> Http.partFileRequestBody k fileName $ Http.RequestBodyLBS fileContent) files
+
+instance FromMultipart backend (RawMultipartData backend) where
   fromMultipart = ask
 
 {- | Extracts multipart data from request body
@@ -85,8 +124,8 @@ multipartBody ::
   ValueCombinator i (WithReq m (Multipart backend r)) ts m
 multipartBody = Request \makeError req -> do
   backend <- (waiBackend @m @backend)
-  (params, files) <- liftIO $ Wai.parseRequestBody backend req
-  case runExcept $ runReaderT (fromMultipart @backend @r) MultipartData{..} of
+  (rawParams, rawFiles) <- liftIO $ Wai.parseRequestBody backend req
+  case runExcept $ runReaderT (fromMultipart @backend @r) RawMultipartData{..} of
     Left e -> throwM $ makeError req Http.status400 (convertString e)
     Right v -> pure $ Multipart v
 
@@ -106,7 +145,7 @@ getParam a =
       . except
       . maybe (Left $ ("Param not found: " <>) $ Text.Encode.decodeUtf8 a) Right
       . lookup a
-      . params
+      . rawParams
 
 {- |
 @
@@ -124,7 +163,7 @@ lookupParam a =
       . except
       . Right
       . lookup a
-      . params
+      . rawParams
 
 {- |
 @
@@ -142,7 +181,7 @@ lookupFile a =
       . except
       . Right
       . lookup a
-      . files
+      . rawFiles
 
 {- |
 @
@@ -160,4 +199,4 @@ getFile a =
       . except
       . maybe (Left $ ("File not found: " <>) $ Text.Encode.decodeUtf8 a) Right
       . lookup a
-      . files
+      . rawFiles

@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Web.Minion.Examples.ServerEvent (app) where
+module Web.Minion.Examples.ServerEvent (app, api) where
 
 import Control.Concurrent (Chan, forkIO, newChan, readChan, writeChan)
 import Control.Monad (forever)

@@ -7,6 +7,7 @@ import Web.Minion.Args (DelayedArgs, HandleArgs, type (~>))
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Media.Json (Json)
 import Web.Minion.Response.Body (RespBody, handleBody)
+import Web.Minion.Response.Status (IsStatus, OK)
 import Web.Minion.Router (
   Router',
  )
@@ -17,9 +18,22 @@ handleJson ::
   (HandleArgs ts st m) =>
   (ToJSON o) =>
   (MonadIO m) =>
-  (I.Introspection i I.Response (RespBody '[Json] o)) =>
+  (I.Introspection i I.Response (RespBody OK '[Json] o)) =>
   -- | .
   Http.Method ->
   (DelayedArgs st ~> m o) ->
   Router' i ts m
-handleJson = handleBody @'[Json] @o @m @ts
+handleJson = handleBody @OK @'[Json] @o @m @ts
+
+{-# INLINE handleJsonStatus #-}
+handleJsonStatus ::
+  forall status o m ts i st.
+  (HandleArgs ts st m, IsStatus status) =>
+  (ToJSON o) =>
+  (MonadIO m) =>
+  (I.Introspection i I.Response (RespBody status '[Json] o)) =>
+  -- | .
+  Http.Method ->
+  (DelayedArgs st ~> m o) ->
+  Router' i ts m
+handleJsonStatus = handleBody @status @'[Json] @o @m @ts

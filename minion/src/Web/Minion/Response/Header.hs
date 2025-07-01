@@ -18,7 +18,7 @@ import Web.HttpApiData (ToHttpApiData (..))
 import Web.Minion.Args.Internal
 import Web.Minion.Response (CanRespond (..), ToResponse (..))
 
-newtype AddHeader name a = AddHeader a
+data AddHeader name a = AddHeader a | OverwriteHeader a
   deriving (Functor)
 
 newtype RawHeaderValue = RawHeaderValue Bytes.ByteString
@@ -42,18 +42,20 @@ instance (CanRespond a) => CanRespond (AddHeaders hs a) where
 instance (ToResponse m a, UnwindHeaders hs, Monad m) => ToResponse m (AddHeaders hs a) where
   {-# INLINE toResponse #-}
   toResponse accept AddHeaders{..} =
-    Wai.mapResponseHeaders (unwindHeaders @hs headers <>) <$> toResponse accept body
+    Wai.mapResponseHeaders (\headers' -> unwindHeaders @hs headers' headers) <$> toResponse accept body
 
 class UnwindHeaders hs where
-  unwindHeaders :: HList hs -> [Http.Header]
+  unwindHeaders :: [Http.Header] -> HList hs -> [Http.Header]
 
 instance UnwindHeaders '[] where
   {-# INLINE unwindHeaders #-}
-  unwindHeaders :: HList '[] -> [Http.Header]
-  unwindHeaders _ = []
+  unwindHeaders :: [Http.Header] -> HList '[] -> [Http.Header]
+  unwindHeaders = const
 
 instance (UnwindHeaders hs, KnownSymbol name, ToHttpApiData typ) => UnwindHeaders (AddHeader name typ ': hs) where
   {-# INLINE unwindHeaders #-}
-  unwindHeaders (AddHeader val :# hs) =
-    (CI.mk $ Text.Encode.encodeUtf8 $ Text.pack $ symbolVal (Proxy @name), toHeader @typ val)
-      : unwindHeaders @hs hs
+  unwindHeaders headers = \case
+    AddHeader val :# hs -> unwindHeaders ((name, toHeader @typ val) : headers) hs
+    OverwriteHeader val :# hs -> unwindHeaders ((name, toHeader @typ val) : filter ((/= name) . fst) headers) hs
+   where
+    name = CI.mk $ Text.Encode.encodeUtf8 $ Text.pack $ symbolVal (Proxy @name)

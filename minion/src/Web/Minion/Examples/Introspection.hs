@@ -1,5 +1,6 @@
 module Web.Minion.Examples.Introspection (app) where
 
+import Data.ByteString qualified as Bytes
 import Data.CaseInsensitive qualified as CI
 import Data.List (nub)
 import Data.Maybe (catMaybes)
@@ -14,6 +15,8 @@ import Web.Minion qualified as M
 import Web.Minion.Auth.Basic
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Media
+import Web.Minion.Media.OctetStream (Bytes, Chunks, OctetStream)
+import Web.Minion.Response.Status (OK)
 import Web.Minion.Router
 
 {-
@@ -84,7 +87,7 @@ description = M.description @Text
 api :: Router' '[Pretty] Void IO
 api = "api" /> myAuth .> ["post" /> postApi, "comments" /> commentsApi, "images" /> imagesApi]
  where
-  imagesApi = description "Images api" /> captures @String "pathToImage" .> handle @Chunks GET undefined
+  imagesApi = description "Images api" /> captures @String "pathToImage" .> handle @(RespBody OK '[OctetStream Bytes] Bytes.ByteString) GET undefined
   postApi =
     description "Post api"
       /> capture @PostId "postId"
@@ -141,7 +144,7 @@ instance PrettyBody Chunks where
 instance PrettyBody (Auth '[Basic] a) where
   prettyBody = "Basic auth required"
 
-instance (AllContentTypes cts) => PrettyBody (RespBody cts a) where
+instance (AllContentTypes cts) => PrettyBody (RespBody status cts a) where
   prettyBody = "Response: " <> Text.intercalate " or " (mediaTypes @cts)
 
 mediaTypes :: forall cts. (AllContentTypes cts) => [Text]

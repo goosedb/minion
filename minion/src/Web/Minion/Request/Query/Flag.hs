@@ -1,4 +1,4 @@
-module Web.Minion.Request.Query.QueryFlag (QueryFlag (..), QueryFlagStrict (..)) where
+module Web.Minion.Request.Query.Flag (QueryFlag (..), QueryFlagStrict (..)) where
 
 import Control.Applicative (asum)
 import Control.Monad.Catch (MonadThrow)

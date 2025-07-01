@@ -1,5 +1,4 @@
 {-# LANGUAGE ImpredicativeTypes #-}
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 
 module Web.Minion (
@@ -33,9 +32,7 @@ module Web.Minion (
   reqPlainText,
   reqFormUrlEncoded,
   reqJson,
-  LazyBytes (..),
   lazyBytesBody,
-  Chunks (..),
   chunksBody,
 
   -- ** Response
@@ -107,7 +104,6 @@ import Web.Minion.Error (
 import GHC.Exts (IsList (..))
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Json (handleJson, reqJson)
-import Web.Minion.Raw
 import Web.Minion.Request.Body (ReqBody (..), reqBody)
 import Web.Minion.Request.Body.FormUrlEncoded
 import Web.Minion.Request.Body.PlainText

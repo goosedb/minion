@@ -1,4 +1,7 @@
 {-# LANGUAGE PartialTypeSignatures #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Use lambda-case" #-}
 
 module Web.Minion.Router.Internal where
 
@@ -16,6 +19,7 @@ import Control.Exception qualified as IOExc
 import Control.Monad.Catch qualified as Exc
 import Data.ByteString qualified as Bytes
 import Data.ByteString.Lazy qualified as Bytes.Lazy
+import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Kind (Type)
 import Data.List (sortOn)
 import Data.List.NonEmpty (NonEmpty)
@@ -194,16 +198,20 @@ route withMatchedData ErrorBuilders{..} = go
       HideIntrospection r -> go state args r
       Handle @o method f -> routeHandle withMatchedData state args method f
       Raw f -> routeRaw withMatchedData state args f
-      Request @f get r -> \req resp -> go state (WithReq (get bodyErrorBuilder req) :#! args) r req resp
-      Header @a @presence @parsing headerName get r -> \req ->
+      Request @f get r -> \req resp -> do
+        once <- memoize $ get bodyErrorBuilder req
+        go state (WithReq once :#! args) r req resp
+      Header @a @presence @parsing headerName get r -> \req resp -> do
         let header = lookupHeader req headerName
-            withHeader = WithHeader (get (headerErrorBuilder req) header) :#! args
-         in go RoutingState{matchedHeaders = MatchedHeader headerName header : matchedHeaders, ..} withHeader r req
-      QueryParam @a @presence @parsing queryParamName parse r -> \req ->
+        once <- memoize $ get (headerErrorBuilder req) header
+        let withHeader = WithHeader once :#! args
+        go RoutingState{matchedHeaders = MatchedHeader headerName header : matchedHeaders, ..} withHeader r req resp
+      QueryParam @a @presence @parsing queryParamName parse r -> \req resp -> do
         let mbQueryParamVal = Nel.nonEmpty $ map snd $ filter ((queryParamName ==) . fst) $ Http.queryString req
-            rawVals = map (fromMaybe "") $ Nel.toList $ fromMaybe [] mbQueryParamVal
-            withQueryParam = WithQueryParam (parse (queryParamsErrorBuilder req) mbQueryParamVal) :#! args
-         in go RoutingState{matchedQuery = MatchedQuery queryParamName rawVals : matchedQuery, ..} withQueryParam r req
+        let rawVals = map (fromMaybe "") $ Nel.toList $ fromMaybe [] mbQueryParamVal
+        once <- memoize $ parse (queryParamsErrorBuilder req) mbQueryParamVal
+        let withQueryParam = WithQueryParam once :#! args
+        go RoutingState{matchedQuery = MatchedQuery queryParamName rawVals : matchedQuery, ..} withQueryParam r req resp
       Piece txt r -> case path of
         (t : ts) | txt == t -> go RoutingState{path = ts, matchedPath = StaticPiece txt : matchedPath, ..} args r
         _ -> \_ _ -> throwMIO (NoMatch Nothing)
@@ -215,6 +223,20 @@ route withMatchedData ErrorBuilders{..} = go
           v <- parse (captureErrorBuilder req) t
           go RoutingState{path = ts, matchedPath = DynamicPiece t name : matchedPath, ..} (WithPiece v :#! args) r req resp
         _ -> throwMIO (NoMatch Nothing)
+
+memoize :: (IO.MonadIO m) => m a -> m (m a)
+memoize action = do
+  cache <- IO.liftIO (newIORef Nothing)
+  pure (fetch cache)
+ where
+  fetch var = do
+    cached <- IO.liftIO (readIORef var)
+    case cached of
+      Just a -> pure a
+      Nothing -> do
+        res <- action
+        IO.liftIO $ writeIORef var (Just res)
+        pure res
 
 {-# INLINE routeRaw #-}
 routeRaw ::

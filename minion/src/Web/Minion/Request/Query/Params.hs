@@ -1,6 +1,6 @@
 {-# LANGUAGE InstanceSigs #-}
 
-module Web.Minion.Request.Query.QueryParams (QueryParams (..), QueryParamsStrict (..)) where
+module Web.Minion.Request.Query.Params (QueryParams (..), QueryParamsStrict (..)) where
 
 import Control.Monad.Catch (MonadThrow (throwM))
 import Data.ByteString qualified as Bytes

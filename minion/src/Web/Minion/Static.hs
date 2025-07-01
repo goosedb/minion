@@ -1,5 +1,6 @@
 module Web.Minion.Static (StaticFileResponse, staticFiles, defaultExtsMap) where
 
+import Control.Monad.IO.Class (MonadIO)
 import Data.ByteString qualified as Bytes
 import Data.ByteString.Lazy qualified as Bytes.Lazy
 import Data.Map.Strict qualified as Map
@@ -8,24 +9,26 @@ import Network.HTTP.Media
 import System.FilePath (takeExtension)
 import Web.Minion
 import Web.Minion.Introspect qualified as I
+import Web.Minion.Media.OctetStream (Bytes, OctetStream)
 import Web.Minion.Response.Header qualified as Header
+import Web.Minion.Response.Status (OK)
 
-type StaticFileResponse = Header.AddHeaders '[Header.AddHeader "Content-Type" Header.RawHeaderValue] LazyBytes
+type StaticFileResponse = Header.AddHeaders '[Header.AddHeader "Content-Type" Header.RawHeaderValue] (RespBody OK '[OctetStream Bytes] Bytes.Lazy.ByteString)
 
 {-# INLINE staticFiles #-}
 staticFiles ::
-  (Monad m, I.Introspection i I.Response StaticFileResponse) =>
+  (Monad m, I.Introspection i I.Response StaticFileResponse, MonadIO m) =>
   -- | Use 'defaultExtsMap'
   Map.Map String MediaType ->
   [(FilePath, Bytes.ByteString)] ->
   Router' i Void m
 staticFiles extsMap = foldMap \(path, content) ->
   let contentType = getContentType extsMap (takeExtension path)
-   in piece path /> handle GET do
-        pure $
+   in piece path /> handle @StaticFileResponse GET do
+        pure
           Header.AddHeaders
-            { headers = Header.AddHeader @"Content-Type" (Header.RawHeaderValue contentType) :# HNil
-            , body = LazyBytes $ Bytes.Lazy.fromStrict content
+            { headers = Header.OverwriteHeader @"Content-Type" (Header.RawHeaderValue contentType) :# HNil
+            , body = RespBody $ Bytes.Lazy.fromStrict content
             }
 
 getContentType :: (RenderHeader a) => Map.Map String a -> FilePath -> Bytes.ByteString

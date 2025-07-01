@@ -11,7 +11,7 @@ build-type:         Simple
 extra-source-files: README.md
 
 common common
-  ghc-options:        -Wall
+  ghc-options:        -Wall -Wunused-packages
   default-extensions:
     AllowAmbiguousTypes
     BlockArguments
@@ -52,9 +52,8 @@ library
   import:           common
   exposed-modules:  Web.Minion.Htmx.Headers
   build-depends:
-    , base        >=4.16 && <5
-    , bytestring
-    , http-types
+    , base           >=4.16 && <5
+    , http-api-data
     , minion
     , text
 
