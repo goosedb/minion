@@ -29,23 +29,22 @@ module Web.Minion (
   -- ** Request
   ReqBody (..),
   reqBody,
-  reqPlainText,
-  reqFormUrlEncoded,
-  reqJson,
-  lazyBytesBody,
-  chunksBody,
+
+  -- ** Media
+  PlainText,
+  Json,
+  FormUrlEncoded,
 
   -- ** Response
   NoBody (..),
   ToResponse (..),
   CanRespond (..),
+  Ok,
 
   -- ** Handler
   raw,
   handle,
   handlePP,
-  handleJson,
-  handlePlainText,
   RespBody (..),
   handleBody,
   module Web.Minion.Request.Method,
@@ -63,6 +62,7 @@ module Web.Minion (
   MatchedQuery (..),
   serve,
   serveWithSettings,
+  serveWithSettingsAndParams,
   defaultMinionSettings,
   defaultErrorBuilders,
 
@@ -103,18 +103,17 @@ import Web.Minion.Error (
 
 import GHC.Exts (IsList (..))
 import Web.Minion.Introspect qualified as I
-import Web.Minion.Json (handleJson, reqJson)
+import Web.Minion.Media.FormUrlEncoded (FormUrlEncoded)
+import Web.Minion.Media.Json (Json)
+import Web.Minion.Media.PlainText (PlainText)
 import Web.Minion.Request.Body (ReqBody (..), reqBody)
-import Web.Minion.Request.Body.FormUrlEncoded
-import Web.Minion.Request.Body.PlainText
-import Web.Minion.Request.Body.Raw
 import Web.Minion.Request.Header
 import Web.Minion.Request.Method
 import Web.Minion.Request.Query
 import Web.Minion.Request.Url
 import Web.Minion.Response
 import Web.Minion.Response.Body (RespBody (RespBody), handleBody)
-import Web.Minion.Response.Body.PlainText (handlePlainText)
+import Web.Minion.Response.Status (Ok)
 import Web.Minion.Router.Internal
 
 -- | Use it if you don't care about value captured by previous combinator
@@ -215,7 +214,7 @@ handlePP nt method f = Handle @o method (nt . apply f)
 description :: forall a i m ts. (I.Introspection i I.Description a) => a -> Combinator i ts m
 description = Description
 
-hideIntrospection :: Router' i ts m -> Router' i' ts m
+hideIntrospection :: (I.MaybeElem i) => Router' i ts m -> Router' i' ts m
 hideIntrospection = HideIntrospection
 
 {- | Injects middleware
@@ -264,6 +263,16 @@ serveWithSettings :: (IO.MonadIO m, Exc.MonadCatch m) => MinionSettings m -> Rou
 serveWithSettings MinionSettings{..} router req resp =
   Exc.catches @[]
     (route withMatchedData errorBuilders (RoutingState (filter (not . Text.null) $ Http.pathInfo req) [] [] []) RHNil router req resp)
+    [ Exc.Handler \(NoMatch e) -> maybe notFound httpError e >>= IO.liftIO . resp
+    , Exc.Handler $ httpError >=> IO.liftIO . resp
+    ]
+
+-- | The same as 'serve' but allows to configure exceptions handlers
+{-# INLINE serveWithSettingsAndParams #-}
+serveWithSettingsAndParams :: (IO.MonadIO m, Exc.MonadCatch m) => MinionSettings m -> RHList params -> Router' i params m -> ApplicationM m
+serveWithSettingsAndParams MinionSettings{..} params router req resp =
+  Exc.catches @[]
+    (route withMatchedData errorBuilders (RoutingState (filter (not . Text.null) $ Http.pathInfo req) [] [] []) params router req resp)
     [ Exc.Handler \(NoMatch e) -> maybe notFound httpError e >>= IO.liftIO . resp
     , Exc.Handler $ httpError >=> IO.liftIO . resp
     ]

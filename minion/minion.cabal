@@ -73,39 +73,31 @@ library
     Web.Minion.Auth
     Web.Minion.Auth.Basic
     Web.Minion.Client.Types
+    Web.Minion.Codec.Decode
+    Web.Minion.Codec.Encode
     Web.Minion.Error
     Web.Minion.Introspect
-    Web.Minion.Codec.Encode
-    Web.Minion.Response.Body.OctetStream 
-    Web.Minion.Media.OctetStream
     Web.Minion.Introspect.Internal
-    Web.Minion.Json
     Web.Minion.Media
     Web.Minion.Media.FormUrlEncoded
+    Web.Minion.Media.Html
     Web.Minion.Media.Json
+    Web.Minion.Media.OctetStream
     Web.Minion.Media.PlainText
     Web.Minion.Request
     Web.Minion.Request.Body
-    Web.Minion.Codec.Decode
-    Web.Minion.Media.Html
-    Web.Minion.Request.Body.FormUrlEncoded
-    Web.Minion.Request.Body.Json
-    Web.Minion.Request.Body.PlainText
-    Web.Minion.Request.Body.Raw
     Web.Minion.Request.Header
     Web.Minion.Request.Header.Internal
     Web.Minion.Request.Method
     Web.Minion.Request.Query
-    Web.Minion.Request.Query.Internal
     Web.Minion.Request.Query.Flag
     Web.Minion.Request.Query.Form
+    Web.Minion.Request.Query.Internal
     Web.Minion.Request.Query.Param
     Web.Minion.Request.Query.Params
     Web.Minion.Request.Url
     Web.Minion.Response
     Web.Minion.Response.Body
-    Web.Minion.Response.Body.Json
-    Web.Minion.Response.Body.PlainText
     Web.Minion.Response.Header
     Web.Minion.Response.Status
     Web.Minion.Response.Union
@@ -130,7 +122,6 @@ library
     , string-conversions
     , text
     , transformers
-    , resourcet
     , wai
 
   hs-source-dirs:   src
@@ -170,7 +161,6 @@ executable minion-introspection-example
   build-depends:
     , base
     , minion
-    , warp
 
   hs-source-dirs:   app
   default-language: Haskell2010

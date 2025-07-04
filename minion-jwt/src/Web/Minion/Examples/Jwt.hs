@@ -36,7 +36,7 @@ app = do
 api :: Router Void M
 api = "api" /> "auth" /> myAuth .> handle GET authEndpoint
 
-authEndpoint :: UserId -> ReaderT Env IO NoBody
+authEndpoint :: UserId -> ReaderT Env IO (NoBody Ok)
 authEndpoint userId = liftIO (putStrLn $ "User " <> show userId) $> NoBody
 
 myAuth :: ValueCombinator '[] (WithReq M (Auth '[Bearer JwtUserInfo] UserId)) ts M

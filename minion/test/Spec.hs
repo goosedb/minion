@@ -64,11 +64,12 @@ import Text.Read (readEither, readMaybe)
 import Web.FormUrlEncoded
 import Web.Minion
 import Web.Minion qualified as Minion
-import Web.Minion.Json
 import Web.Minion.Media (ContentType (..))
 import Web.Minion.Media.FormUrlEncoded
+import Web.Minion.Media.Json (Json)
 import Web.Minion.Media.PlainText (PlainText)
 import Web.Minion.Request.Body (Decode (..))
+import Web.Minion.Response.Status (Ok)
 
 {-# INLINE compile #-}
 compile :: Minion.Router Void IO -> IO (Wai.Request -> IO Wai.Response)
@@ -231,8 +232,8 @@ bodySpec = do
             /> "api"
             /> "foo"
             /> "bar"
-            /> [ reqJson @Foo .> handleJson @J.Value GET \Foo{..} -> pure $ J.object ["foo" .= J.object ["foo" .= foo, "bar" .= bar]]
-               , reqJson @Baz .> handleJson @J.Value POST \Baz{..} -> pure $ J.object ["baz" .= J.object ["baz" .= baz, "qux" .= qux]]
+            /> [ reqBody @'[Json] @Foo .> handleBody @Ok @'[Json] @J.Value GET \Foo{..} -> pure $ J.object ["foo" .= J.object ["foo" .= foo, "bar" .= bar]]
+               , reqBody @'[Json] @Baz .> handleBody @Ok @'[Json] @J.Value POST \Baz{..} -> pure $ J.object ["baz" .= J.object ["baz" .= baz, "qux" .= qux]]
                ]
 
     (get & withPath ["api", "foo", "bar"] & withJsonBody Foo{foo = 1, bar = False})
@@ -250,7 +251,7 @@ bodySpec = do
             /> "foo"
             /> "bar"
             /> reqBody @'[Json, PlainText] @Foo
-            .> handleJson POST \Foo{..} -> pure $ J.object ["foo" .= J.object ["foo" .= foo, "bar" .= bar]]
+            .> handleBody @Ok @'[Json] POST \Foo{..} -> pure $ J.object ["foo" .= J.object ["foo" .= foo, "bar" .= bar]]
 
     (post & withPath ["api", "foo", "bar"] & withContentType @Json & withJsonBody Foo{foo = 1, bar = False})
       `sendToIO` server
@@ -267,8 +268,8 @@ bodySpec = do
   test "parse first content-type if not specified" do
     let api cont = root /> "api" /> "foo" /> "bar" /> cont
     let handle Foo{..} = pure $ J.object ["foo" .= J.object ["foo" .= foo, "bar" .= bar]]
-    let serverJson = api /> reqBody @'[Json, PlainText] @Foo .> handleJson POST handle
-    let serverText = api /> reqBody @'[PlainText, Json] @Foo .> handleJson POST handle
+    let serverJson = api /> reqBody @'[Json, PlainText] @Foo .> handleBody @Ok @'[Json] POST handle
+    let serverText = api /> reqBody @'[PlainText, Json] @Foo .> handleBody @Ok @'[Json] POST handle
 
     (post & withPath ["api", "foo", "bar"] & withJsonBody Foo{foo = 1, bar = False})
       `sendToIO` serverJson
@@ -283,12 +284,12 @@ methodSpec = do
   let server =
         root
           /> "api"
-          /> [ "foo" /> "bar" /> handlePlainText GET (pure $ txt "/foo/bar get")
-             , "foo" /> "bar" /> handlePlainText POST (pure $ txt "/foo/bar post")
+          /> [ "foo" /> "bar" /> handleBody @Ok @'[PlainText] GET (pure $ txt "/foo/bar get")
+             , "foo" /> "bar" /> handleBody @Ok @'[PlainText] POST (pure $ txt "/foo/bar post")
              , "baz"
                  /> "qux"
-                 /> [ handlePlainText GET (pure $ txt "/baz/qux get")
-                    , handlePlainText POST (pure $ txt "/baz/qux post")
+                 /> [ handleBody @Ok @'[PlainText] GET (pure $ txt "/baz/qux get")
+                    , handleBody @Ok @'[PlainText] POST (pure $ txt "/baz/qux post")
                     ]
              ]
   test "find route with specified method" do
@@ -323,8 +324,8 @@ captureSpec = do
     let server =
           root
             /> "api"
-            /> [ capture @String "name" .> handlePlainText GET (\_ -> pure $ txt "dynamic")
-               , "John" /> handlePlainText GET (pure $ txt "static")
+            /> [ capture @String "name" .> handleBody @Ok @'[PlainText] GET (\_ -> pure $ txt "dynamic")
+               , "John" /> handleBody @Ok @'[PlainText] GET (pure $ txt "static")
                ]
     withPath ["api", "Mary"] get
       `sendTo` server
@@ -338,9 +339,9 @@ captureSpec = do
     let server =
           root
             /> "api"
-            /> [ capture @Int "id" .> "foo" /> handleJson GET (\_id -> pure $ J.object ["id" .= _id])
-               , capture @Bool "enabled" .> handleJson GET (\enabled -> pure $ J.object ["enabled" .= enabled])
-               , capture @String "name" .> handleJson GET (\name -> pure $ J.object ["name" .= name])
+            /> [ capture @Int "id" .> "foo" /> handleBody @Ok @'[Json] GET (\_id -> pure $ J.object ["id" .= _id])
+               , capture @Bool "enabled" .> handleBody @Ok @'[Json] GET (\enabled -> pure $ J.object ["enabled" .= enabled])
+               , capture @String "name" .> handleBody @Ok @'[Json] GET (\name -> pure $ J.object ["name" .= name])
                ]
 
     withPath ["api", "6", "foo"] get
@@ -359,8 +360,8 @@ captureSpec = do
     let server =
           root
             /> "api"
-            /> [ capture @Int "id" .> "foo" /> handleJson GET (\_id -> pure $ J.object ["id" .= _id])
-               , capture @Bool "enabled" .> handleJson GET (\enabled -> pure $ J.object ["enabled" .= enabled])
+            /> [ capture @Int "id" .> "foo" /> handleBody @Ok @'[Json] GET (\_id -> pure $ J.object ["id" .= _id])
+               , capture @Bool "enabled" .> handleBody @Ok @'[Json] GET (\enabled -> pure $ J.object ["enabled" .= enabled])
                ]
 
     withPath ["api", "6", "foo"] get
@@ -381,9 +382,9 @@ capturesSpec = do
     let server =
           root
             /> "api"
-            /> [ captures @Int "id" .> handleJson GET (\ids -> pure $ J.object ["ids" .= ids])
-               , captures @Bool "flags" .> handleJson GET (\flags -> pure $ J.object ["flags" .= flags])
-               , captures @String "items" .> handleJson GET (\items -> pure $ J.object ["items" .= items])
+            /> [ captures @Int "id" .> handleBody @Ok @'[Json] GET (\ids -> pure $ J.object ["ids" .= ids])
+               , captures @Bool "flags" .> handleBody @Ok @'[Json] GET (\flags -> pure $ J.object ["flags" .= flags])
+               , captures @String "items" .> handleBody @Ok @'[Json] GET (\items -> pure $ J.object ["items" .= items])
                ]
 
     withPath ["api", "6", "10", "500"] get
@@ -402,8 +403,8 @@ capturesSpec = do
     let server =
           root
             /> "api"
-            /> [ captures @Int "id" .> handleJson GET (\ids -> pure $ J.object ["ids" .= ids])
-               , captures @Bool "flags" .> handleJson GET (\flags -> pure $ J.object ["flags" .= flags])
+            /> [ captures @Int "id" .> handleBody @Ok @'[Json] GET (\ids -> pure $ J.object ["ids" .= ids])
+               , captures @Bool "flags" .> handleBody @Ok @'[Json] GET (\flags -> pure $ J.object ["flags" .= flags])
                ]
 
     withPath ["api", "6", "10", "500"] get
@@ -420,7 +421,7 @@ capturesSpec = do
 
 pathSpec :: Spec
 pathSpec = do
-  let pt = handlePlainText GET . pure . txt . fromString . show @Int
+  let pt = handleBody @Ok @'[PlainText] GET . pure . txt . fromString . show @Int
   let server =
         root
           [ "api"
@@ -476,7 +477,7 @@ queryParamSpec :: Spec
 queryParamSpec = do
   describe "required" do
     let server = root do
-          "api" /> "query" /> queryParam @Required @String "foo" .> queryParam @Required @String "bar" .> handleJson @J.Value GET method
+          "api" /> "query" /> queryParam @Required @String "foo" .> queryParam @Required @String "bar" .> handleBody @Ok @'[Json] @J.Value GET method
         method foo bar = pure $ J.object ["foo" .= foo, "bar" .= bar]
         baseRequest = get & withPath ["api", "query"]
 
@@ -495,7 +496,7 @@ queryParamSpec = do
   describe "optional" do
     test "collect query" do
       let server = root do
-            "api" /> "query" /> queryParam @Optional @String "qux" .> queryParam @Optional @String "baz" .> handleJson @J.Value GET method
+            "api" /> "query" /> queryParam @Optional @String "qux" .> queryParam @Optional @String "baz" .> handleBody @Ok @'[Json] @J.Value GET method
           method qux baz = pure $ J.object ["qux" .= qux, "baz" .= baz]
 
       let request = get & withPath ["api", "query"] & withQueryParams ["qux" .-> "hi"]
@@ -505,7 +506,7 @@ queryParamSpec = do
 
   describe "mixed" do
     let server = root do
-          "api" /> "query" /> queryParam @Optional @String "qux" .> queryParam @Required @String "baz" .> handleJson @J.Value GET method
+          "api" /> "query" /> queryParam @Optional @String "qux" .> queryParam @Required @String "baz" .> handleBody @Ok @'[Json] @J.Value GET method
         method qux baz = pure $ J.object ["qux" .= qux, "baz" .= baz]
         baseRequest = get & withPath ["api", "query"]
 
@@ -525,7 +526,7 @@ queryParamsSpec :: Spec
 queryParamsSpec = do
   describe "required" do
     let server = root do
-          "api" /> "query" /> queryParams @Required @Int "foo" .> handleJson @J.Value GET method
+          "api" /> "query" /> queryParams @Required @Int "foo" .> handleBody @Ok @'[Json] @J.Value GET method
         method foo = pure $ J.object ["foo" .= foo]
         baseRequest = get & withPath ["api", "query"]
 
@@ -543,7 +544,7 @@ queryParamsSpec = do
 
   test "optional" do
     let server = root do
-          "api" /> "query" /> queryParams @Optional @Int "foo" .> queryParams @Optional @Int "bar" .> handleJson @J.Value GET method
+          "api" /> "query" /> queryParams @Optional @Int "foo" .> queryParams @Optional @Int "bar" .> handleBody @Ok @'[Json] @J.Value GET method
         method foo bar = pure $ J.object ["foo" .= foo, "bar" .= bar]
         request = get & withPath ["api", "query"] & withQueryParams ["foo" .-> "1", "foo" .-> "2", "foo" .-> "3"]
 
@@ -562,7 +563,7 @@ queryFlagSpec = do
             .> queryFlag @Required "baz"
             .> queryFlag @Required "qux"
             .> queryFlag @Required "yoi"
-            .> handleJson @J.Value GET method
+            .> handleBody @Ok @'[Json] @J.Value GET method
         method (QueryFlag foo) (QueryFlag bar) (QueryFlag baz) (QueryFlag qux) (QueryFlag yoi) =
           pure $
             J.object
@@ -593,7 +594,7 @@ queryFlagSpec = do
             /> queryFlag @Optional "foo"
             .> queryFlag @Optional "bar"
             .> queryFlag @Optional "baz"
-            .> handleJson @J.Value GET method
+            .> handleBody @Ok @'[Json] @J.Value GET method
         method (fmap getQueryFlag -> foo) (fmap getQueryFlag -> bar) (fmap getQueryFlag -> baz) =
           pure $
             J.object
@@ -615,7 +616,7 @@ queryFormSpec :: Spec
 queryFormSpec = do
   test "positive" do
     let server = root do
-          "api" /> "query" /> queryParamsForm @SomeQueryForm .> handleJson @J.Value GET method
+          "api" /> "query" /> queryParamsForm @SomeQueryForm .> handleBody @Ok @'[Json] @J.Value GET method
         method form = pure $ J.toJSON form
         baseRequest = get & withPath ["api", "query"]
 
@@ -626,7 +627,7 @@ queryFormSpec = do
 
   test "negative" do
     let server = root do
-          "api" /> "query" /> queryParamsForm @SomeQueryForm .> handleJson @J.Value GET method
+          "api" /> "query" /> queryParamsForm @SomeQueryForm .> handleBody @Ok @'[Json] @J.Value GET method
         method form = pure $ J.toJSON form
         baseRequest = get & withPath ["api", "query"]
 

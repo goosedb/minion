@@ -66,7 +66,7 @@ library
     Web.Minion.Response.ServerEvent
 
   build-depends:
-    , base                >=4.16 && <5
+    , base                  >=4.16 && <5
     , binary
     , bytestring
     , http-client
@@ -74,9 +74,9 @@ library
     , http-types
     , minion
     , resourcet
-    , string-conversions
     , streaming
     , streaming-bytestring
+    , string-conversions
     , text
     , transformers
     , wai
@@ -95,9 +95,6 @@ executable minion-wai-extra-server-event-example
   build-depends:
     , base
     , minion-wai-extra
-    , minion-client
-    , streaming
-    , minion
     , warp
 
   hs-source-dirs:   app

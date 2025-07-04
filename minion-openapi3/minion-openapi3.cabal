@@ -78,7 +78,7 @@ library
     Web.Minion.Files
 
   build-depends:
-      base                       >=4.16 && <5
+    , base                       >=4.16 && <5
     , blaze-html
     , blaze-markup
     , bytestring
@@ -106,7 +106,6 @@ executable minion-openapi3-example
   main-is:          OpenApi3.hs
   build-depends:
     , base
-    , minion
     , minion-openapi3
     , warp
 

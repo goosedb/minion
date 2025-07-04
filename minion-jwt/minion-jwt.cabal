@@ -58,6 +58,9 @@ library
 
   if flag(examples)
     exposed-modules: Web.Minion.Examples.Jwt
+    build-depends:
+      , mtl
+      , text
 
   exposed-modules:  Web.Minion.Auth.Jwt
   build-depends:

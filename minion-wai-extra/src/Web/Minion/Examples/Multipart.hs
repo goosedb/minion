@@ -11,7 +11,6 @@ import Network.Wai.Parse (FileInfo (..))
 import System.Environment (getArgs)
 import Web.Minion
 import Web.Minion.Request.Multipart
-import Web.Minion.Response.Status (OK)
 
 app :: IO (ApplicationM IO)
 app =
@@ -53,7 +52,7 @@ apiMem =
   "api"
     /> "multipart"
     /> multipartBody @Mem @ReportMem
-    .> handle @(NoBody OK) POST endpoint
+    .> handle @(NoBody Ok) POST endpoint
  where
   endpoint ReportMem{..} = do
     putStrLn $ "Reporter: " <> Text.unpack reporter
@@ -66,7 +65,7 @@ apiTmp =
   "api"
     /> "multipart"
     /> multipartBody @Tmp @ReportTmp
-    .> handle @(NoBody OK) POST endpoint
+    .> handle @(NoBody Ok) POST endpoint
  where
   endpoint ReportTmp{..} = liftIO do
     putStrLn $ "Reporter: " <> Text.unpack reporter

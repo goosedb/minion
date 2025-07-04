@@ -69,10 +69,8 @@ library
     , binary
     , bytestring
     , conduit
-    , http-types
     , minion
     , text
-    , wai
 
   hs-source-dirs:   src
   default-language: Haskell2010

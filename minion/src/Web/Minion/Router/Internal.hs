@@ -172,6 +172,7 @@ data Router' (i :: [Type]) (ts :: Type) m where
     Router' i ts m
   HideIntrospection ::
     forall i' i ts m.
+    (I.MaybeElem i) =>
     Router' i ts m ->
     Router' i' ts m
 

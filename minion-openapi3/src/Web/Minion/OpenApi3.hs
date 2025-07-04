@@ -277,7 +277,7 @@ generateOpenApi3 = \case
     generateOpenApi3 r & opeanapi3Header @presence @a hname
   Request @r _ r -> wi @I.Request @r do
     generateOpenApi3 r & attachRequestSchema @r
-  HideIntrospection _ -> mempty
+  HideIntrospection @_ @i' rest -> I.withElem @OpenApi3 @i' mempty (generateOpenApi3 rest)
   Piece path r -> prependPath (Text.unpack path) (generateOpenApi3 r)
   Middleware _ r -> generateOpenApi3 r
   Alt rs -> foldMap generateOpenApi3 rs

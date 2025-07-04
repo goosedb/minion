@@ -22,4 +22,4 @@ publicApi =
     /> "hello"
     /> description (DescriptionText "Greets user")
     /> queryParam @Required @String "name"
-    .> handlePlainText @String GET (\name -> pure $ "Hello, " <> name <> "!")
+    .> handleBody @Ok @'[PlainText] @String GET (\name -> pure $ "Hello, " <> name <> "!")

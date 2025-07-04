@@ -6,6 +6,7 @@ module Web.Minion.OpenApi3.Ui (
 import Web.Minion hiding (description)
 
 import Control.Lens hiding (index)
+import Control.Monad.IO.Class (MonadIO)
 import Data.Bifunctor (Bifunctor (..))
 import Data.String (IsString (..))
 import Data.Text qualified as Text
@@ -17,7 +18,6 @@ import Web.Minion.Introspect qualified as I
 import Web.Minion.Media.Html (Html)
 import Web.Minion.OpenApi3
 import Web.Minion.Response (Redirect (Redirect))
-import Web.Minion.Response.Status (OK)
 import Web.Minion.Static
 
 data OpenApi3Config = OpenApi3Config
@@ -35,7 +35,7 @@ openapi3 ::
 openapi3 OpenApi3Config{..} r =
   fromString routePrefix
     /> [ handle @Redirect GET (pure $ Redirect indexHtmlPath)
-       , fromString openapi3File /> handleJson GET (pure $ generateOpenApi3 r)
+       , fromString openapi3File /> handleBody @Ok @'[Json] GET (pure $ generateOpenApi3 r)
        , fromString staticDir /> [staticFiles defaultExtsMap ui', index_html /> getIndex]
        ]
  where
@@ -45,7 +45,7 @@ openapi3 OpenApi3Config{..} r =
   index_html = "index.html"
   ui' = map (first (dropWhile (== '/'))) ui
   getIndex = handle GET do
-    pure $ RespBody @OK @'[Html] index
+    pure $ RespBody @Ok @'[Html] index
 
   index =
     indexTemplate

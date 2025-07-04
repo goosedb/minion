@@ -16,7 +16,6 @@ import Web.Minion.Auth.Basic
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Media
 import Web.Minion.Media.OctetStream (Bytes, Chunks, OctetStream)
-import Web.Minion.Response.Status (OK)
 import Web.Minion.Router
 
 {-
@@ -55,10 +54,7 @@ prettyApi = Text.unlines . map prettyInfoToText . go
   addHeader hn isReq PrettyInfo{..} = PrettyInfo{headers = (Text.Encoding.decodeUtf8 (CI.original hn), isReq) : headers, ..}
   addRequest req PrettyInfo{..} = PrettyInfo{request = req : request, ..}
 
-  wi :: forall t x a. (I.Introspection i t x) => ((I.IntrospectionFor Pretty t x) => a) -> a
-  wi = I.withIntrospection @Pretty @i @t @x
-
-  go :: Router' i a m -> [PrettyInfo]
+  go :: forall hasPretty a. (I.Elem Pretty hasPretty) => Router' hasPretty a m -> [PrettyInfo]
   go = \case
     Piece txt cont -> map (prependPath txt) (go cont)
     Capture _ txt cont -> map (prependPath (":" <> txt)) (go cont)
@@ -78,8 +74,11 @@ prettyApi = Text.unlines . map prettyInfoToText . go
     Handle @o method _ -> wi @I.Response @o do
       [PrettyInfo [] [] [] [] (prettyBody @o) (Text.Encoding.decodeUtf8 method) []]
     MapArgs _ cont -> go cont
-    HideIntrospection _ -> []
+    HideIntrospection @_ @i' rest -> I.withElem @Pretty @i' [] (go rest)
     Raw _ -> []
+   where
+    wi :: forall t x. (I.Introspection hasPretty t x) => ((I.IntrospectionFor Pretty t x) => [PrettyInfo]) -> [PrettyInfo]
+    wi = I.withIntrospection @Pretty @hasPretty @t @x
 
 description :: Text -> Combinator '[Pretty] ts m
 description = M.description @Text
@@ -87,14 +86,14 @@ description = M.description @Text
 api :: Router' '[Pretty] Void IO
 api = "api" /> myAuth .> ["post" /> postApi, "comments" /> commentsApi, "images" /> imagesApi]
  where
-  imagesApi = description "Images api" /> captures @String "pathToImage" .> handle @(RespBody OK '[OctetStream Bytes] Bytes.ByteString) GET undefined
+  imagesApi = description "Images api" /> captures @String "pathToImage" .> handle @(RespBody Ok '[OctetStream Bytes] Bytes.ByteString) GET undefined
   postApi =
     description "Post api"
       /> capture @PostId "postId"
-      .> [ description "Get post by ID" /> handleJson @Text GET undefined
+      .> [ description "Get post by ID" /> handleBody @Ok @'[Json] @Text GET undefined
          , description "Create or update post"
-             /> reqPlainText @Text
-             .> handleJson @() POST undefined
+             /> reqBody @'[PlainText] @Text
+             .> handleBody @Ok @'[Json] @() POST undefined
          ]
   commentsApi =
     description "Comments api"
@@ -103,11 +102,15 @@ api = "api" /> myAuth .> ["post" /> postApi, "comments" /> commentsApi, "images"
                .> queryParam @Required @Size "size"
                .> queryParam @Required @Page "page"
                .> description "Get comments for post"
-               /> handleJson @[Text] GET undefined
+               /> handleBody @Ok @'[Json] @[Text] GET undefined
            , capture @CommentId "commentId"
                .> description "Create or update comment"
-               /> reqPlainText @Text
-               .> handleJson @() POST undefined
+               /> reqBody @'[PlainText] @Text
+               .> handleBody @Ok @'[Json] @() POST undefined
+           , "hidden"
+               /> [ hideIntrospection @'[Pretty] $ "partially" /> handleBody @Ok @'[Json] @() POST undefined
+                  , hideIntrospection @'[] $ "at_all" /> handleBody @Ok @'[Json] @() POST undefined
+                  ]
            ]
          ]
   myAuth =

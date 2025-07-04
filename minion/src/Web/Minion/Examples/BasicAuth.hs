@@ -7,7 +7,6 @@ import Data.List (elemIndex)
 import Web.Minion
 import Web.Minion.Auth.Basic
 import Web.Minion.Error (statusOf, unauthorized)
-import Web.Minion.Response.Status (OK)
 
 type Env = IORef [BasicAuth]
 type M = ReaderT Env IO
@@ -23,7 +22,7 @@ app = do
   pure $ \req resp -> runReaderT (serve api req resp) users
 
 api :: Router Void M
-api = "api" /> "auth" /> "basic" /> myAuth .> handle @(NoBody OK) GET endpoint
+api = "api" /> "auth" /> "basic" /> myAuth .> handle @(NoBody Ok) GET endpoint
  where
   endpoint (UserId userId) = liftIO do
     putStrLn $ "Called " <> show userId

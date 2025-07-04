@@ -8,16 +8,15 @@ import Data.Text qualified as Text
 import Data.Text.IO qualified as Text.IO
 import Web.Minion
 import Web.Minion.Conduit
-import Web.Minion.Response.Status (OK)
+import Web.Minion.Media.OctetStream (Chunks, OctetStream)
 import Web.Minion.Request.Body (reqBodyStream)
-import Web.Minion.Media.OctetStream ( OctetStream, Chunks )
 import Web.Minion.Response.Body (handleBodyStream)
 
 app :: ApplicationM IO
 app = serve api
 
 api :: Router Void IO
-api = "api" /> "conduit" /> reqBodyStream @'[OctetStream Chunks] .> handleBodyStream @OK @'[OctetStream Chunks] POST upperCase
+api = "api" /> "conduit" /> reqBodyStream @'[OctetStream Chunks] .> handleBodyStream @Ok @'[OctetStream Chunks] POST upperCase
 
 upperCase :: ConduitRequest IO -> IO ConduitResponse
 upperCase (ConduitRequest source) = pure $ ConduitResponse do

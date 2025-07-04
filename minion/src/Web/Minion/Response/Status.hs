@@ -15,8 +15,8 @@ data SwitchingProtocols
 instance IsStatus SwitchingProtocols where
   httpStatus = status101
 
-data OK
-instance IsStatus OK where
+data Ok
+instance IsStatus Ok where
   httpStatus = status200
 
 data Created

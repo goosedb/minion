@@ -32,7 +32,7 @@ data FooResponse = FooResponse
   deriving (Generic, ToJSON)
 
 api :: Router Void IO
-api = "api" /> "json" /> reqJson @FooRequest .> handleJson @(Response FooResponse) POST endpoint
+api = "api" /> "json" /> reqBody @'[Json] @FooRequest .> handleBody @Ok @'[Json] @(Response FooResponse) POST endpoint
  where
   endpoint FooRequest{..} = pure do
     if foo + bar < 0

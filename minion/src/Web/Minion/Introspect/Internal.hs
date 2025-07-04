@@ -1,8 +1,11 @@
 module Web.Minion.Introspect.Internal where
 
+import Data.Data (Proxy (Proxy))
 import Data.Kind
-import Data.Typeable (Typeable)
+import Data.Maybe (fromMaybe)
+import Data.Typeable (Typeable, eqT)
 import Data.Void (Void)
+import GHC.Base (WithDict (withDict))
 import Unsafe.Coerce (unsafeCoerce)
 
 data Introspected
@@ -23,14 +26,13 @@ data IntrospectionDictionary c where
 data ErasedIntrospectionDictionary where
   ErasedIntrospectionDictionary :: IntrospectionDictionary c -> ErasedIntrospectionDictionary
 
-type family PackOfIntrospections ii t x where
-  PackOfIntrospections (i ': ii) t x = IntrospectionDictionary (IntrospectionFor i t x) ': PackOfIntrospections ii t x
-  PackOfIntrospections '[] t x = '[]
-
 withIntrospection :: forall i ii t x a. (Elem i ii, Introspection ii t x) => ((IntrospectionFor i t x) => a) -> a
 withIntrospection a = case introspections @ii @t @x !! indexOf @i @ii of
   ErasedIntrospectionDictionary dict -> case unsafeCoerce @_ @(IntrospectionDictionary (IntrospectionFor i t x)) dict of
     IntrospectionDictionary -> a
+
+withElem :: forall (i :: Type) ii a. (MaybeElem ii, Typeable i) => a -> ((Elem i ii) => a) -> a
+withElem fallback action = fromMaybe fallback $ castElem @i @ii action
 
 class Introspection ii t x where
   introspections :: [ErasedIntrospectionDictionary]
@@ -49,6 +51,22 @@ instance Elem i (i ': ii) where
 
 instance {-# OVERLAPPABLE #-} (Elem i ii) => Elem i (x ': ii) where
   indexOf = 1 + indexOf @i @ii
+
+class MaybeElem (ii :: [Type]) where
+  maybeIndexOf :: forall (i :: Type). (Typeable i) => Proxy i -> Maybe Int
+
+instance MaybeElem '[] where
+  maybeIndexOf _ = Nothing
+
+instance (Typeable x, MaybeElem ii) => MaybeElem ((x :: Type) ': ii) where
+  maybeIndexOf (Proxy @i) = case eqT @i @x of
+    Just _ -> Just 0
+    Nothing -> (1 +) <$> maybeIndexOf @ii (Proxy @i)
+
+castElem :: forall (i :: Type) ii a. (MaybeElem ii, Typeable i) => ((Elem i ii) => a) -> Maybe a
+castElem action = case maybeIndexOf @ii (Proxy @i) of
+  Just index -> Just $ withDict @(Elem i ii) index action
+  Nothing -> Nothing
 
 class HasIntrospection i where
   type IntrospectionFor i (v :: Introspected) :: Type -> Constraint
