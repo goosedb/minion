@@ -1,4 +1,4 @@
-module Web.Minion.Request.Url (capture, captures, piece) where
+module Web.Minion.Request.Path (capture, captures, piece) where
 
 import Control.Monad.Catch (MonadThrow (throwM))
 import Data.Bifunctor (Bifunctor (..))

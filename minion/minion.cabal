@@ -95,7 +95,7 @@ library
     Web.Minion.Request.Query.Internal
     Web.Minion.Request.Query.Param
     Web.Minion.Request.Query.Params
-    Web.Minion.Request.Url
+    Web.Minion.Request.Path
     Web.Minion.Response
     Web.Minion.Response.Body
     Web.Minion.Response.Header
@@ -135,6 +135,7 @@ test-suite test
   build-depends:
     , aeson
     , base
+    , cookie
     , binary
     , bytestring
     , case-insensitive

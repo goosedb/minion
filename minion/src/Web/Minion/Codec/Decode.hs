@@ -12,8 +12,8 @@ import Data.Text qualified as Text
 import Data.Text.Lazy qualified as Text.Lazy
 import Data.Text.Lazy.Encoding qualified as Text.Lazy.Encode
 import Network.HTTP.Media qualified as Http
+import Web.FormUrlEncoded (FromForm)
 import Web.FormUrlEncoded qualified as Http
-import Web.Internal.FormUrlEncoded (FromForm)
 import Web.Minion.Media (ContentType (..))
 import Web.Minion.Media.FormUrlEncoded
 import Web.Minion.Media.PlainText

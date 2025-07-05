@@ -24,7 +24,7 @@ module Web.Minion (
   module Web.Minion.Request.Query,
 
   -- ** URL
-  module Web.Minion.Request.Url,
+  module Web.Minion.Request.Path,
 
   -- ** Request
   ReqBody (..),
@@ -109,8 +109,8 @@ import Web.Minion.Media.PlainText (PlainText)
 import Web.Minion.Request.Body (ReqBody (..), reqBody)
 import Web.Minion.Request.Header
 import Web.Minion.Request.Method
+import Web.Minion.Request.Path
 import Web.Minion.Request.Query
-import Web.Minion.Request.Url
 import Web.Minion.Response
 import Web.Minion.Response.Body (RespBody (RespBody), handleBody)
 import Web.Minion.Response.Status (Ok)
