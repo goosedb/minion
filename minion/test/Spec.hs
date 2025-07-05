@@ -564,7 +564,7 @@ queryFlagSpec = do
             .> queryFlag @Required "qux"
             .> queryFlag @Required "yoi"
             .> handleBody @Ok @'[Json] @J.Value GET method
-        method (QueryFlag foo) (QueryFlag bar) (QueryFlag baz) (QueryFlag qux) (QueryFlag yoi) =
+        method foo bar baz qux yoi =
           pure $
             J.object
               [ "foo" .= foo
@@ -587,15 +587,14 @@ queryFlagSpec = do
         `sendTo` server
         `responseShouldFailWith` \ShowResponse{..} -> status == Http.status400
   test "optional" do
-    let getQueryFlag (QueryFlag a) = a
-        server = root do
+    let server = root do
           "api"
             /> "query"
             /> queryFlag @Optional "foo"
             .> queryFlag @Optional "bar"
             .> queryFlag @Optional "baz"
             .> handleBody @Ok @'[Json] @J.Value GET method
-        method (fmap getQueryFlag -> foo) (fmap getQueryFlag -> bar) (fmap getQueryFlag -> baz) =
+        method foo bar baz =
           pure $
             J.object
               [ "foo" .= foo

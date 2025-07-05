@@ -59,6 +59,11 @@ data Router' (i :: [Type]) (ts :: Type) m
 
 It's worth paying attention specifically to the second point because it might not be immediately obvious. This is due to the fact that handler typing in Minion works not from the root but from the handlers themselves.
 
+Assuming that most of the time you won't need any introspection, Minion provides a type alias
+```haskell
+type Router = Router' '[]
+```
+
 For example, if you replace `hello` with a hole:
 ```haskell
   "api"
@@ -71,9 +76,7 @@ For example, if you replace `hello` with a hole:
 ```
 You'll find that its type is `String -> IO String`:
 ```haskell
-src/Web/Minion/Examples/HelloWorld.hs: error: [GHC-88464]
     • Found hole: _ :: [Char] -> IO String
-    • In the fifth argument of ‘handleBody’, namely ‘_’
 ```
 This means that in order for `hello` to work properly, it somehow needs to know where to obtain the `String` from. Therefore, we wrap `handleBody @Ok @'[PlainText] @String GET hello` inside `capture @String "name"`.  
 Therefore, our ultimate goal is to create a `Router' i Void m`, meaning this is a router that can be executed.
@@ -92,7 +95,7 @@ Note that ValueCombinator is a function that describes how to extract a value of
 ### Path 
 These combinators are defined in the module `Web.Minion.Request.Path` and available from `Web.Minion`.
 
-* `piece` (or string literal with OverloadedStrings enabled): matches a static path segment.
+* `piece` (or string literal with `OverloadedStrings` enabled): matches a static path segment.
 * `capture`: extracts and parses a value from a single path segment.
 * `captures`: captures and parses all remaining path segments.
 
@@ -107,7 +110,6 @@ api =
     .> handleBody @Ok @'[PlainText] @String GET _ -- (5)
 
 -- ghc 
-    src/Web/Minion/Examples/HelloWorld.hs: error: [GHC-88464]
     • Found hole: _ :: [Char] -> [[Char]] -> IO String
 ```
 1. Implicit `piece` via `OverloadedStrings`
@@ -146,15 +148,12 @@ api =
 
 
 -- ghc
-src/Web/Minion/Examples/HelloWorld.hs: error: [GHC-88464]
     • Found hole:
         _ :: Int
           -> Maybe Int
           -> Maybe Bool
           -> Maybe (NonEmpty String)
           -> IO [Comment]
-
-src/Web/Minion/Examples/HelloWorld.hs: error: [GHC-88464]
     • Found hole: _ :: CommentsQuery -> IO [Comment]
 ```
 1. Expects a query parameter named `page` of type `Int`.
@@ -163,3 +162,142 @@ src/Web/Minion/Examples/HelloWorld.hs: error: [GHC-88464]
 4. Captures all query parameters named `tag` into a list.
 5. Handler function, compiler infers its type as `Int -> Maybe Int -> Maybe Bool -> Maybe (NonEmpty Int) -> IO [Comment]`.
 6. Captures multiple query parameters at once using the `FromForm` parser, which is derived via `Generic`. Note that `queryFlag` is different from `queryParam Bool`, since the former parses `?approved`, `?approved=1`, `?approved=true` as `True`, whereas the latter only accepts `?approved=true`.
+
+There is also lenient version for `queryParam`: `queryParamLenient`, which in case of parsing error passes the error to the handler instead of throwing a `BadRequest`.
+
+### Headers
+You can extract headers from requests using the following combinators defined in the module `Web.Minion.Request.Header` and available via `Web.Minion`:
+
+* `header`
+* `headerLenient`
+
+For example:
+
+```haskell
+api :: Router Void IO
+api =
+  "api"
+    /> [ "strict" /> xCustomHeader .> handleBody @Ok @'[PlainText] @String GET _
+       , "lenient" /> xAnotherCustomHeader .> handleBody @Ok @'[PlainText] @String GET _
+       ]
+
+where
+  xCustomHeader = 
+    header @Required @Int "X-Custom-Header" \_ -> 
+      pure . Bytes.length . NonEmpty.head
+
+  xAnotherCustomHeader = 
+    headerLenient @Optional @Int @String "X-Custom-Header" \_ -> 
+      pure . (\i -> if even i then Right i else Left "not even") . Bytes.length . NonEmpty.head
+
+-- ghc
+    • Found hole: _ :: Int -> IO String
+    • Found hole:
+        _ :: Maybe (Either Data.Text.Internal.Text Int) -> IO String
+```
+
+Since HTTP allows sending multiple headers with the same name, the `header` combinator requires a closure capable of processing a non-empty list of values associated with the given header name:
+
+```haskell
+header ::
+    forall a m i ts.
+    (I.Introspection i I.Header a, MonadThrow m) =>
+    Http.HeaderName ->
+    (MakeError -> NonEmpty Bytes.ByteString -> m a) -> -- NonEmpty
+    ValueCombinator i (WithHeader presence Strict m a) ts m
+```
+
+Of course, in most cases it will be sufficient to use either `NonEmpty.head` or `NonEmpty.last`.
+
+The `headerLenient` combinator works similarly to `queryParamLenient`, allowing an error in header processing to propagate into the handler:
+
+```haskell
+headerLenient :: forall a e m ts i.
+    (I.Introspection i I.Header a, MonadThrow m) =>
+    Http.HeaderName ->
+    (MakeError -> NonEmpty Bytes.ByteString -> m (Either e a)) -> -- Allows passing error on type `e` to the handler
+    ValueCombinator i (WithHeader presence (Lenient e) m a) ts m
+```
+
+Note that when handling headers, you have access to all capabilities provided by your router's underlying monad `m`.
+
+### Request
+In order to extract the request body, you can utilize the functions `reqBody` and `reqBodyStream`, both of which are defined in the module `Web.Minion.Request.Body` and accessible through `Web.Minion`. Here's an example:
+
+```haskell
+data FooRequest = FooRequest
+  { foo :: Int
+  , bar :: Int
+  }
+  deriving (Generic, FromJSON)
+
+api :: Router Void IO
+api = "api"  
+  /> "foo"
+  /> reqBody @'[Json, PlainText] @FooRequest 
+  .> handleBody @Ok @'[PlainText] @String POST _
+
+-- ghc
+    • Found hole: _ :: FooRequest -> IO String
+```
+
+The `reqBody` combinator accepts a list of content types from which the request body can be parsed, along with the request type itself (`@FooRequest`). Since no way has been provided to parse `FooRequest` from plain text, the compiler fails compilation with the following error:
+
+```haskell
+• No instance for ‘Web.Minion.Codec.Decode.Decode PlainText FooRequest’
+    arising from a use of ‘reqBody’
+```
+
+This instance could be implemented as follows:
+
+```haskell
+instance Decode PlainText FooRequest where 
+  decode (traverse (readMaybe . Text.Lazy.unpack) . Text.Lazy.words . Text.Lazy.decodeUtf8 -> Just [foo, bar]) = pure FooRequest {..}
+  decode _ = Left "Failed to parse FooRequest"
+```
+
+After implementing this instance, the `/api/foo` endpoint will accept:
+
+* Requests with `Content-Type: text/plain` and a body like `"5, 6"`
+* Requests with `Content-Type: application/json` and a body like `{"foo": 5, "bar": 6}`
+
+If the request body needs to be streamed, consider using `reqBodyStream`, which requires providing an instance of `DecodeStream` for every listed content type.
+
+For more complex scenarios, it's advisable to use the basic combinator `Request`:
+
+```haskell
+  Request ::
+    forall r m i ts.
+    (I.Introspection i I.Request r, IsRequest r) =>
+    -- | .
+    (ErrorBuilder -> Wai.Request -> m r) ->
+    Router' i (ts :+ WithReq m r) m ->
+    Router' i ts m
+```
+
+This combinator allows extracting arbitrary data from the Wai request while utilizing all features offered by the monad `m`.
+
+### Handler
+
+Finally, after capturing all necessary components, it's time to process the request. For this purpose, there is a function called `handle`, which converts anything satisfying the typeclasses `ToResponse` and `CanRespond` into an HTTP response. In previous examples, we used a more specific function named `handleBody`, which operates on the `RespBody` type:
+
+```haskell
+newtype RespBody status cts a = RespBody a
+
+handleBody ::
+  forall status cts o m ts i st.
+  (HandleArgs ts st m) =>
+  (IsResponse m (RespBody status cts o)) =>
+  (I.Introspection i I.Response (RespBody status cts o)) =>
+  Http.Method ->
+  (DelayedArgs st ~> m o) ->
+  Router' i ts m
+```
+The `handleBody` function expects:
+
+* An HTTP status code for the response;
+* A list of possible Content-Type formats into which the response may be converted;
+* The HTTP method being handled;
+* Finally, a handler function.
+
+If streaming the response body is intended, one should instead use the `handleBodyStream` function, which would require instances of `EncodeStream` for each Content-Type specified.

@@ -6,7 +6,6 @@ import Control.Monad.Catch (MonadThrow (..))
 import Data.ByteString qualified as Bytes
 import Data.List.NonEmpty (NonEmpty, nonEmpty)
 import Data.String.Conversions (ConvertibleStrings (..))
-import Data.Text (Text)
 import Network.HTTP.Types qualified as Http
 import Web.Minion.Args.Internal
 import Web.Minion.Introspect qualified as I
@@ -33,20 +32,20 @@ instance HeaderStrict Optional where
   header hn handle = Header hn (\mk -> maybe (pure Nothing) (fmap Just . handle mk) . nonEmpty)
 
 class HeaderLenient presence where
-  headerLenient ::
+  headerLenient :: forall a e m ts i.
     (I.Introspection i I.Header a, MonadThrow m) =>
     -- | .
     Http.HeaderName ->
-    (MakeError -> NonEmpty Bytes.ByteString -> m (Either Text a)) ->
-    ValueCombinator i (WithHeader presence (Lenient Text) m a) ts m
+    (MakeError -> NonEmpty Bytes.ByteString -> m (Either e a)) ->
+    ValueCombinator i (WithHeader presence (Lenient e) m a) ts m
 
 instance HeaderLenient Required where
   headerLenient ::
     (I.Introspection i I.Header a, MonadThrow m) =>
     -- \| .
     Http.HeaderName ->
-    (MakeError -> NonEmpty Bytes.ByteString -> m (Either Text a)) ->
-    ValueCombinator i (WithHeader Required (Lenient Text) m a) ts m
+    (MakeError -> NonEmpty Bytes.ByteString -> m (Either e a)) ->
+    ValueCombinator i (WithHeader Required (Lenient e) m a) ts m
   headerLenient hn f = Header hn \makeError ->
     maybe
       (throwM . makeError Http.status400 . convertString $ headerNotFoundError hn)
@@ -58,6 +57,6 @@ instance HeaderLenient Optional where
     (I.Introspection i I.Header a, MonadThrow m) =>
     -- \| .
     Http.HeaderName ->
-    (MakeError -> NonEmpty Bytes.ByteString -> m (Either Text a)) ->
-    ValueCombinator i (WithHeader Optional (Lenient Text) m a) ts m
+    (MakeError -> NonEmpty Bytes.ByteString -> m (Either e a)) ->
+    ValueCombinator i (WithHeader Optional (Lenient e) m a) ts m
   headerLenient hn f = Header hn (\mkErr -> maybe (pure Nothing) (fmap Just . f mkErr) . nonEmpty)
