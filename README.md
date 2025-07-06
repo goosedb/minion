@@ -275,7 +275,21 @@ For more complex scenarios, it's advisable to use the basic combinator `Request`
     Router' i ts m
 ```
 
-This combinator allows extracting arbitrary data from the Wai request while utilizing all features offered by the monad `m`.
+The combinator allows extracting arbitrary data from the Wai.Request while utilizing all features offered by the monad `m`. Note that reading the request body from `Wai.Request` is a destructive operation—once consumed, it can't be accessed again. Therefore, make sure to place the combinator that extracts the request body **strictly after** all other combinators (except for `piece`, `capture`, and `captures`) that might attempt to match another route by initiating parsing.
+For example:
+```haskell
+api :: Router Void IO
+api = "api"  
+  /> 
+    [ "ok" /> someHeaderCheck .> reqBody @'[Json] @String .> handleBody @Ok @'[Json] POST _ -- (1)
+    , "also_ok" /> reqBody @'[Json] @String .> "foo" .> handleBody @Ok @'[Json] POST _ -- (2)
+    , "not_ok" /> reqBody @'[Json] @String .> someHeaderCheck .> handleBody @Ok @'[Json] POST _ -- (3)
+    ]
+  where someHeaderCheck = header @Required @Int "X-Custom-Header" <...> 
+```
+1. First, Minion ensures that the header is present and valid before starting to read the request body.
+2. Combinators `piece`, `capture`, and `captures` execute **before** all others.
+3. By the time Minion checks the header, the request body will already have been read. If the required header is missing, Minion will return a response with a 400 status code. However, within `<...>`, the user might throw a `NoMatch` exception, which will make Minion to try matching against another path.
 
 ### Handler
 
