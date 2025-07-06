@@ -52,18 +52,15 @@ api = -- (3)
 The main type of `Minion` is `Router`, which has several type parameters:
 ```haskell
 data Router' (i :: [Type]) (ts :: Type) m
+
+-- Assuming that most of the time you won't need any introspection, Minion provides a type alias
+type Router = Router' '[]
 ```
 1. A list of introspections, such as OpenApi3 or Client.
 2. Arguments required by the router to start up.
 3. Monad in which your server logic will run.
 
 It's worth paying attention specifically to the second point because it might not be immediately obvious. This is due to the fact that handler typing in Minion works not from the root but from the handlers themselves.
-
-Assuming that most of the time you won't need any introspection, Minion provides a type alias
-```haskell
-type Router = Router' '[]
-```
-
 For example, if you replace `hello` with a hole:
 ```haskell
   "api"
@@ -90,7 +87,7 @@ type ValueCombinator i v ts m = Router' i (ts :+ v) m -> Router' i ts m
 
 type Combinator i ts m = Router' i ts m -> Router' i ts m
 ```
-Note that ValueCombinator is a function that describes how to extract a value of type v from a request.
+Note that `ValueCombinator` is a function that describes how to extract a value of type `v` from a request. In some sense, `Router' i (ts :+ v) m -> Router' i ts m` is analogous to `(v -> Router' i ts m) -> Router' i ts m`, but the actual passing of `v` is deferred until the handler stage.
 
 ### Path 
 These combinators are defined in the module `Web.Minion.Request.Path` and available from `Web.Minion`.
