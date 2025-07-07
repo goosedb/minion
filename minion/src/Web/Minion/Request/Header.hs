@@ -32,7 +32,8 @@ instance HeaderStrict Optional where
   header hn handle = Header hn (\mk -> maybe (pure Nothing) (fmap Just . handle mk) . nonEmpty)
 
 class HeaderLenient presence where
-  headerLenient :: forall a e m ts i.
+  headerLenient ::
+    forall a e m ts i.
     (I.Introspection i I.Header a, MonadThrow m) =>
     -- | .
     Http.HeaderName ->

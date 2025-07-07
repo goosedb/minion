@@ -51,7 +51,7 @@ apiMem :: Router Void IO
 apiMem =
   "api"
     /> "multipart"
-    /> multipartBody @Mem @ReportMem
+    /> multipart @Mem @ReportMem
     .> handle @(NoBody Ok) POST endpoint
  where
   endpoint ReportMem{..} = do
@@ -64,7 +64,7 @@ apiTmp :: Router Void (ResourceT IO)
 apiTmp =
   "api"
     /> "multipart"
-    /> multipartBody @Tmp @ReportTmp
+    /> multipart @Tmp @ReportTmp
     .> handle @(NoBody Ok) POST endpoint
  where
   endpoint ReportTmp{..} = liftIO do

@@ -8,6 +8,7 @@ module Web.Minion.Args.Internal where
 import Data.Functor (($>))
 import Data.Kind (Type)
 import Data.Void (Void)
+import GHC.TypeError qualified as TE
 import Web.Minion.Request (IsRequest (..))
 
 data (a :: Type) :+ (b :: Type)
@@ -60,6 +61,9 @@ instance (GetByType t ts) => GetByType t (x ': ts) where
 
 instance {-# OVERLAPPING #-} GetByType t (t ': ts) where
   getByType (a :# _) = a
+
+instance (TE.TypeError (TE.Text "Can't find " TE.:<>: TE.ShowType t TE.:<>: TE.Text " in context")) => GetByType t '[] where
+  getByType _ = undefined
 
 class Reverse' (l1 :: [Type]) (l2 :: [Type]) (l3 :: [Type]) | l1 l2 -> l3 where
   reverse' :: HList l1 -> HList l2 -> HList l3

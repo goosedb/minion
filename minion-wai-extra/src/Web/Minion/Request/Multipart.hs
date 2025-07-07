@@ -1,6 +1,6 @@
 module Web.Minion.Request.Multipart (
   Multipart (..),
-  multipartBody,
+  multipart,
   Backend (..),
   Tmp,
   Mem,
@@ -111,10 +111,10 @@ instance FromMultipart backend (RawMultipartData backend) where
 {- | Extracts multipart data from request body
 
 @
-... /> 'multipartBody' \@'Tmp' @Foo .> ...
+... /> 'multipart' \@'Tmp' @Foo .> ...
 @
 -}
-multipartBody ::
+multipart ::
   forall backend r m i ts.
   (I.Introspection i I.Request (Multipart backend r)) =>
   (MonadThrow m) =>
@@ -122,7 +122,7 @@ multipartBody ::
   (Backend m backend) =>
   -- | .
   ValueCombinator i (WithReq m (Multipart backend r)) ts m
-multipartBody = Request \makeError req -> do
+multipart = Request \makeError req -> do
   backend <- (waiBackend @m @backend)
   (rawParams, rawFiles) <- liftIO $ Wai.parseRequestBody backend req
   case runExcept $ runReaderT (fromMultipart @backend @r) RawMultipartData{..} of

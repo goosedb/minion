@@ -57,15 +57,17 @@ auth ::
   ValueCombinator i (WithReq m (Auth auths a)) ts m
 auth ctxm cont = Request \errorBuilder req -> do
   ctx <- ctxm
-  let auths = unwindAuth @ctx @auths @m @a
-      {-# INLINE go #-}
-      go [] = pure Indefinite
-      go (a : as) =
-        a ctx errorBuilder req >>= \case
-          Indefinite -> go as
-          r -> pure r
+  let
+    {-# INLINE go #-}
+    go [] = pure Indefinite
+    go (a : as) =
+      a ctx errorBuilder req >>= \case
+        Indefinite -> go as
+        r -> pure r
   go auths
     >>= fmap Auth . \case
       Authenticated a -> pure a
       BadAuth -> absurd <$> cont (errorBuilder req) BadAuth
       Indefinite -> absurd <$> cont (errorBuilder req) BadAuth
+ where
+  auths = unwindAuth @ctx @auths @m @a

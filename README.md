@@ -13,6 +13,18 @@ Minion is Haskell library for developing web applications. It stands between [Sc
   
 Since Minion defines servers at the term level, it's easier to start and without excess verbosity.
 
+# Guide
+  1. [Getting started](#getting-started)
+  2. [Router](#router)
+  3. [Combinators](#combinators)
+      1. [Path](#path)
+      2. [Query params](#query-params)
+      3. [Headers](#headers)
+      4. [Request](#request)
+      5. [Handler](#handler)
+  4. [Auth](#auth)
+  5. [Introspection](#introspection)
+
 ## Getting started
 
 ```haskell
@@ -56,7 +68,7 @@ data Router' (i :: [Type]) (ts :: Type) m
 -- Assuming that most of the time you won't need any introspection, Minion provides a type alias
 type Router = Router' '[]
 ```
-1. A list of introspections, such as OpenApi3 or Client.
+1. A list of introspections, such as `OpenApi3` or `Client`.
 2. Arguments required by the router to start up.
 3. Monad in which your server logic will run.
 
@@ -87,7 +99,7 @@ type ValueCombinator i v ts m = Router' i (ts :+ v) m -> Router' i ts m
 
 type Combinator i ts m = Router' i ts m -> Router' i ts m
 ```
-Note that `ValueCombinator` is a function that describes how to extract a value of type `v` from a request. In some sense, `Router' i (ts :+ v) m -> Router' i ts m` is analogous to `(v -> Router' i ts m) -> Router' i ts m`, but the actual passing of `v` is deferred until the handler stage.
+`ValueCombinator` is a function that describes how to extract a value of type `v` from a request. In some sense, `Router' i (ts :+ v) m -> Router' i ts m` is analogous to `(v -> Router' i ts m) -> Router' i ts m`, but the actual passing of `v` is deferred until the handler stage. If this nuance seems too complicated right now, feel free to skip it :)
 
 ### Path 
 These combinators are defined in the module `Web.Minion.Request.Path` and available from `Web.Minion`.
@@ -260,7 +272,7 @@ After implementing this instance, the `/api/foo` endpoint will accept:
 
 If the request body needs to be streamed, consider using `reqBodyStream`, which requires providing an instance of `DecodeStream` for every listed content type.
 
-For more complex scenarios, it's advisable to use the basic combinator `Request`:
+For more complex scenarios (such as multipart, implemented in the `minion-wai-extra` package, or websockets, implemented in the `minion-websockets` package), it's recommended to use the basic combinator `Request`.:
 
 ```haskell
   Request ::
@@ -272,21 +284,7 @@ For more complex scenarios, it's advisable to use the basic combinator `Request`
     Router' i ts m
 ```
 
-The combinator allows extracting arbitrary data from the Wai.Request while utilizing all features offered by the monad `m`. Note that reading the request body from `Wai.Request` is a destructive operation—once consumed, it can't be accessed again. Therefore, make sure to place the combinator that extracts the request body **strictly after** all other combinators (except for `piece`, `capture`, and `captures`) that might attempt to match another route by initiating parsing.
-For example:
-```haskell
-api :: Router Void IO
-api = "api"  
-  /> 
-    [ "ok" /> someHeaderCheck .> reqBody @'[Json] @String .> handleBody @Ok @'[Json] POST _ -- (1)
-    , "also_ok" /> reqBody @'[Json] @String .> "foo" .> handleBody @Ok @'[Json] POST _ -- (2)
-    , "not_ok" /> reqBody @'[Json] @String .> someHeaderCheck .> handleBody @Ok @'[Json] POST _ -- (3)
-    ]
-  where someHeaderCheck = header @Required @Int "X-Custom-Header" <...> 
-```
-1. First, Minion ensures that the header is present and valid before starting to read the request body.
-2. Combinators `piece`, `capture`, and `captures` execute **before** all others.
-3. By the time Minion checks the header, the request body will already have been read. If the required header is missing, Minion will return a response with a 400 status code. However, within `<...>`, the user might throw a `NoMatch` exception, which will make Minion to try matching against another path.
+The combinator allows extracting arbitrary data from the Wai.Request while utilizing all features offered by the monad `m`. Note that reading the request body from `Wai.Request` is a destructive operation—once consumed, it can't be accessed again. Therefore, always strive to read the request body using the `reqBody` combinator (or another that reads the request body) immediately before the handler.
 
 ### Handler
 
@@ -312,3 +310,111 @@ The `handleBody` function expects:
 * Finally, a handler function.
 
 If streaming the response body is intended, one should instead use the `handleBodyStream` function, which would require instances of `EncodeStream` for each Content-Type specified.
+
+### Auth
+Minion provides a combinator for authentication:
+
+```haskell
+auth ::
+  forall auths a m ctx ts i.
+  (I.Introspection i I.Request (Auth auths a)) =>
+  (UnwindAuth ctx auths m a) =>
+  (MonadThrow m) =>
+  m (HList ctx) -> -- (1)
+  (MakeError -> AuthResult Void -> m Void) -> -- (2)
+  ValueCombinator i (WithReq m (Auth auths a)) ts m
+```
+
+1. Context containing settings for each authentication method.
+2. Function for handling failed authentication.
+
+To use an authentication method, it must provide an instance of the `IsAuth` type class:
+
+```haskell
+class IsAuth (auth :: Type) m a where
+  type Settings auth m a :: Type
+  toAuth :: Settings auth m a -> ErrorBuilder -> Wai.Request -> m (AuthResult a)
+```
+An implementation for Basic auth can be seen in the `Web.Minion.Auth.Basic` module. It’s simple enough to understand yet fully functional.
+
+Example API with authorization:
+```haskell
+type Env = [BasicAuth]
+type M = ReaderT Env IO
+
+app :: IO (ApplicationM IO)
+app = do
+  -- (1)
+  let users = [ BasicAuth "alice" "123", BasicAuth "bob" "312", BasicAuth "admin" "admin" ]
+  pure $ \req resp -> runReaderT (serve api req resp) users
+
+api :: Router Void M
+api = "api" /> "auth" /> "basic" /> myAuth .> handle @(NoBody Ok) GET endpoint
+ where
+  endpoint (UserId userId) = liftIO do
+    putStrLn ("Called by " <> show userId) $> NoBody
+
+newtype UserId = UserId Int
+
+-- (2)
+basicAuthSettings :: BasicAuthSettings M UserId
+basicAuthSettings = 
+  BasicAuthSettings \_ ba -> maybe BadAuth (Authenticated . UserId) . elemIndex ba <$> ask
+    
+-- (3)
+myAuth :: ValueCombinator '[] (WithReq M (Auth '[Basic] UserId)) ts M
+myAuth = auth @'[Basic] @UserId (pure $ basicAuthSettings :# HNil) \makeError -> \case
+  _ -> do
+    liftIO $ putStrLn "Unauthorized!"
+    throwM $ makeError (statusOf unauthorized) mempty
+```
+1. List of “known” users. Hardcoded purely for demonstration purposes.
+2. Logic for processing basic authentication. In our case, we simply search the user list for a user with the provided credentials and return their `UserId`, equal to the index in this list.
+3. We pass the context with settings (`basicAuthSettings :# HNil`) and a function that handles the result of authentication to the `auth` combinator. Note that the signature `MakeError -> AuthResult Void -> m Void` gives you only the ability to raise an exception, which is recommended to create using the function `makeError :: Http.Status -> Bytes.Lazy.ByteString -> ServerError` (though you're certainly free to throw whatever you'd like).
+
+If you want to add a new authentication method alongside an existing one:
+```haskell
+data Another
+
+myAuth :: ValueCombinator '[] (WithReq M (Auth '[Basic, Another] UserId)) ts M
+myAuth = auth @'[Basic, Another] @UserId (pure $ basicAuthSettings :# HNil) \makeError -> \case
+  _ -> do
+    liftIO $ putStrLn "Unauthorized!"
+    throwM $ makeError (statusOf unauthorized) mempty
+```
+
+The compiler will suggest what instance you need to implement:
+
+```haskell
+• No instance for ‘IsAuth Another (ReaderT Env IO) UserId’
+    arising from a use of ‘auth’
+```
+
+Implement the instance:
+
+```haskell
+data AnotherAuthSettings = AnotherAuthSettings
+
+instance IsAuth Another m UserId where
+  type Settings Another m UserId = AnotherAuthSettings
+  toAuth = undefined -- doesn't matter here
+```
+
+Then, the compiler will ask you to include settings for this method in the context:
+
+```haskell
+• Can't find AnotherAuthSettings in context
+• In the expression:
+    auth
+      @'[Basic, Another] @UserId (pure $ basicAuthSettings :# HNil)
+      \ makeError -> \case _ -> do ...
+```
+
+Both options `basicAuthSettings :# AnotherAuthSettings :# HNil` and `AnotherAuthSettings :# basicAuthSettings :# HNil` work fine.
+
+Keep in mind that you don't necessarily have to use the `auth` combinator for authentication — you can write your own custom solution.
+
+JWT authentication is available in the `minion-jwt` package.
+
+### Introspection
+
