@@ -21,7 +21,7 @@ import Network.HTTP.Media qualified as Http
 import Network.HTTP.Types qualified as Http
 import Network.Wai qualified as Wai
 import Web.Minion.Args
-import Web.Minion.Codec.Encode
+import Web.Minion.Codec.Encode.Internal
 import Web.Minion.Error
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Media
@@ -63,7 +63,7 @@ buildBody status mt a = respond Wai.responseBuilder $ Bytes.Builder.lazyByteStri
 {- | Handles request with specified HTTP method and responds with specified Content-Type
 
 @
-... '/>' 'handleBody' GET \@'[PlainText] \@MyResponse someEndpoint
+... '/>' 'handleBody' @'Web.Minion.Response.Status.Ok' 'Web.Minion.Request.Method.GET' \@'['Web.Minion.Media.PlainText.PlainText'] \@MyResponse someEndpoint
 @
 -}
 {-# INLINE handleBody #-}
@@ -78,6 +78,12 @@ handleBody ::
   Router' i ts m
 handleBody method = makeHandle @(RespBody status cts) @o method RespBody
 
+{- | Handles request with specified HTTP method and responds with specified Content-Type
+
+@
+... '/>' 'handleBodyStream' @'Web.Minion.Response.Status.Ok' 'Web.Minion.Request.Method.GET' \@'['Web.Minion.Media.OctetStream.OctetStream' 'Web.Minion.Media.OctetStream.Chunks'] \@MyStreamingResponse someEndpoint
+@
+-}
 {-# INLINE handleBodyStream #-}
 handleBodyStream ::
   forall status cts o m ts i st.

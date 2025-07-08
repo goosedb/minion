@@ -74,7 +74,9 @@ library
     Web.Minion.Auth.Basic
     Web.Minion.Client.Types
     Web.Minion.Codec.Decode
+    Web.Minion.Codec.Decode.Internal
     Web.Minion.Codec.Encode
+    Web.Minion.Codec.Encode.Internal
     Web.Minion.Error
     Web.Minion.Introspect
     Web.Minion.Introspect.Internal

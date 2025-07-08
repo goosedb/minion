@@ -260,14 +260,9 @@ defaultErrorBuilders =
 -- | The same as 'serve' but allows to configure exceptions handlers
 {-# INLINE serveWithSettings #-}
 serveWithSettings :: (IO.MonadIO m, Exc.MonadCatch m) => MinionSettings m -> Router' i Void m -> ApplicationM m
-serveWithSettings MinionSettings{..} router req resp =
-  Exc.catches @[]
-    (route withMatchedData errorBuilders (RoutingState (filter (not . Text.null) $ Http.pathInfo req) [] [] []) RHNil router req resp)
-    [ Exc.Handler \(NoMatch e) -> maybe notFound httpError e >>= IO.liftIO . resp
-    , Exc.Handler $ httpError >=> IO.liftIO . resp
-    ]
+serveWithSettings settings = serveWithSettingsAndParams settings RHNil
 
--- | The same as 'serve' but allows to configure exceptions handlers
+-- | The same as 'serve' but allows to configure exceptions handlers and initial params
 {-# INLINE serveWithSettingsAndParams #-}
 serveWithSettingsAndParams :: (IO.MonadIO m, Exc.MonadCatch m) => MinionSettings m -> RHList params -> Router' i params m -> ApplicationM m
 serveWithSettingsAndParams MinionSettings{..} params router req resp =

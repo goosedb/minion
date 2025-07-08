@@ -1,15 +1,15 @@
 module Web.Minion.Request.Body (
-  DecodeBody (..),
+  reqBody,
+  reqBodyStream,
+  DecodeBody (),
   IsRequest (..),
   ReqBody (..),
   ReqBodyStream (..),
   Decode (..),
   Encode (..),
   EncodeStream (..),
-  DecodeBodyStream (..),
+  DecodeBodyStream (),
   ParseBodyError (..),
-  reqBody,
-  reqBodyStream,
 ) where
 
 import Control.Monad.Catch
@@ -20,7 +20,7 @@ import Network.Wai qualified as Wai
 import Web.Minion.Args (WithReq)
 import Web.Minion.Introspect qualified as I
 
-import Web.Minion.Codec.Decode
+import Web.Minion.Codec.Decode.Internal
 import Web.Minion.Codec.Encode
 import Web.Minion.Request
 import Web.Minion.Router
@@ -40,7 +40,7 @@ instance IsRequest (ReqBodyStream cts a) where
 {- | Extracts request body with specified Content-Type
 
 @
-... '/>' 'reqBody' \@'[PlainText] \@MyRequest
+... '/>' 'reqBody' \@'[PlainText] \@MyRequest '.>' ...
 @
 -}
 reqBody ::
@@ -64,6 +64,12 @@ handleError makeError req = \case
   UnsupportedMime _ -> throwM $ makeError req Http.status415 "Unsupported Content-Type"
   InvalidMime _ -> throwM $ makeError req Http.status415 "Unsupported Content-Type"
 
+{- | Extracts streaming request body with specified Content-Type
+
+@
+... '/>' 'reqBodyStream' \@'['Web.Minion.Media.OctetStream.OctetStream' 'Web.Minion.Media.OctetStream.Chunks'] \@MyStreamingRequest '.>' ...
+@
+-}
 reqBodyStream ::
   forall cts r m i ts.
   (I.Introspection i I.Request (ReqBodyStream cts r)) =>

@@ -18,8 +18,9 @@ import Web.HttpApiData qualified as Http
 import Web.Minion (RespBody)
 import Web.Minion.Auth (Auth)
 import Web.Minion.Auth.Basic (Basic, BasicAuth (..), Password (..), Username (..))
+import Web.Minion.Codec.Decode (DecodeBody (..))
 import Web.Minion.Introspect qualified as I
-import Web.Minion.Request.Body (DecodeBody (decodeBody), Encode (..), ParseBodyError (..), ReqBody)
+import Web.Minion.Request.Body (Encode (..), ParseBodyError (..), ReqBody)
 import Web.Minion.Response.Header (AddHeaders)
 import Web.Minion.Response.Status (IsStatus (..))
 import Web.Minion.Response.Union (Inject (inject), Union (..))

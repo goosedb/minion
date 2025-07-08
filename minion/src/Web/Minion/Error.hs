@@ -7,6 +7,9 @@ import Data.ByteString.Lazy qualified as Bytes.Lazy
 import Network.HTTP.Types qualified as Http
 import Network.Wai qualified as Wai
 
+{- | This exception makes the Minion router try to match another path.
+If there are no more options, control will be passed to the `Web.Minion.notFound` function if wrapped `ServerError` is absent, or to `Web.Minion.httpError` if it is present.
+-}
 newtype NoMatch = NoMatch (Maybe ServerError)
   deriving stock (Show)
   deriving anyclass (Exception)

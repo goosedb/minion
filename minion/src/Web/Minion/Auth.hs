@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveFunctor #-}
 
-module Web.Minion.Auth where
+module Web.Minion.Auth (auth, Auth (..), AuthResult (..), IsAuth (..), UnwindAuth (..)) where
 
 import Data.Kind (Type)
 import Data.Void (Void, absurd)
@@ -44,6 +44,10 @@ instance UnwindAuth ctx '[] m a where
   {-# INLINE unwindAuth #-}
   unwindAuth = []
 
+{- | Standard combinator for authentication. An authentication method must implement 'IsAuth'.
+
+     See modules "Web.Minion.Auth.Basic" and "Web.Minion.Examples.BasicAuth" for examples.
+-}
 {-# INLINE auth #-}
 auth ::
   forall auths a m ctx ts i.

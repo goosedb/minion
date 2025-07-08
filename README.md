@@ -127,8 +127,7 @@ api =
 4. Capturing the remainder of the path
 5. Handler function, compiler infers its type as `String -> [String] -> IO String`. Thus, the path `/api/internal/john/foo/bar/baz` would invoke the handler with arguments `"john"` and `["foo", "bar", "baz"]`.
 
-Note that `/>` is used after combinators that do not capture new values, while `.>` follows combinators that perform capturing. Internally, each of them is simply `$`, but with more concrete types.
-
+Note that `/>` is used after combinators that do not capture new values, while `.>` follows combinators that perform capturing. Internally, each of them is simply `$`, but with more concrete types. For a fork, you can use the explicit combinator `alt`, or simply use a list with `OverloadedLists`. We also have a combinator `!>` that captures a value, checks its validity, but doesn't pass it to the handler.
 ### Query params
 
 In Minion, you can extract query parameters from requests in various ways, which are defined in the following modules:
@@ -417,4 +416,70 @@ Keep in mind that you don't necessarily have to use the `auth` combinator for au
 JWT authentication is available in the `minion-jwt` package.
 
 ### Introspection
+Since Minion's `Router` is a `GADT`, we can fold it into any desired value. For example, it can be transformed into an OpenAPI 3 schema (this is implemented in the `minion-openapi3` package). All constructors are available from the module `Web.Minion.Router`, while all necessary tools for introspection reside in the module `Web.Minion.Introspect`. You can find an example of writing router introspection in the module `Web.Minion.Examples.Introspection`. Writing custom introspection in Minion is not very difficult, but does require some preparation.
 
+```haskell
+data Pretty -- (1)
+
+instance I.HasIntrospection Pretty where -- (2)
+  type IntrospectionFor Pretty I.QueryParam = I.AbsolutelyNothing
+  type IntrospectionFor Pretty I.Capture = I.AbsolutelyNothing
+  type IntrospectionFor Pretty I.Captures = I.AbsolutelyNothing
+  type IntrospectionFor Pretty I.Header = I.AbsolutelyNothing
+  type IntrospectionFor Pretty I.Request = PrettyBody
+  type IntrospectionFor Pretty I.Response = PrettyBody
+  type IntrospectionFor Pretty I.Description = PrettyDescription
+
+-- (3)
+class PrettyBody a where
+  prettyBody :: Text
+
+-- (4)
+class PrettyDescription a where
+  prettyDescription :: a -> Text
+```
+1. Firstly, declare your introspection marker type.
+2. Implement an instance of the `HasIntrospection` class for this type, specifying which type classes each routing component should implement. In our example, we don't require anything new from `QueryParam`, `Capture`, `Captures`, and `Header`:
+   ```haskell
+   class AbsolutelyNothing a
+   instance AbsolutelyNothing a
+   ```
+3. Require some textual representation for types that are accepted as requests and returned as responses (`Request` and `Response`).
+4. Demand a way to convert `Description` into text.
+
+In this example, we transform the API into some textual representation:
+```haskell
+prettyApi :: forall i m. (I.Elem Pretty i) => Router' i Void m -> Text
+```
+When matching on a specific constructor of `Router` to bring the `IntrospectionFor Pretty x` instance into scope, it's important to call the function `withIntrospection` from the `Web.Minion.Introspect` module:
+```haskell
+case ... of 
+  Description @desc d cont -> I.withIntrospection @Pretty @hasPretty @I.Description @desc do
+    ...
+```
+To simplify things, you may define a local helper function like so:
+```haskell
+wi :: forall t x. (I.Introspection hasPretty t x) 
+  => ((I.IntrospectionFor Pretty t x) => [PrettyInfo]) 
+  -> [PrettyInfo]
+wi = I.withIntrospection @Pretty @hasPretty @t @x
+```
+Then bringing the required instance will become less verbose:
+```haskell
+case ... of 
+  Description @desc d cont -> wi @I.Description @desc do
+    ...
+```
+Additionally, Minion provides the combinators `hideIntrospection`, allowing parts of the API to be hidden from certain forms of introspection. Suppose you have part of the API that you'd like to exclude from `OpenApi3` but keep accessible via `Pretty` introspection:
+```haskell
+api :: Router' '[Pretty, Openapi3] Void IO
+api = "api" />
+  [ hideIntrospection @'[Pretty] $ "only_pretty" /> handleBody @Ok @'[Json] @() GET _
+  , "all_introspection" /> handleBody @Ok @'[Json] @() GET _
+  ]
+```
+In such cases, when pattern-matching against `HideIntrospection`, you'll lack proof that the particular introspection you're interested in is available within this subtree. The `Web.Minion.Introspect` module offers the function `withElem`, which attempts to locate evidence that the needed introspection exists in the current subtree, but also requires a fallback value if the introspection isn't found.
+```haskell
+case ... of
+  HideIntrospection @_ @i' rest -> I.withElem @Pretty @i' <empty introspection> <build introspection>
+```
