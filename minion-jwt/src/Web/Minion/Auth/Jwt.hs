@@ -7,23 +7,23 @@ import Crypto.JWT qualified as Jose
 import Data.Aeson (FromJSON (..))
 import Data.ByteString qualified as Bytes
 import Data.ByteString.Lazy qualified as Bytes.Lazy
+import Data.Data (Proxy (..))
 import Data.Function ((&))
 import Data.Functor ((<&>))
+import Data.Text
+import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text
 import Data.Time qualified as Time
+import GHC.TypeLits (KnownSymbol, symbolVal)
 import Network.HTTP.Client qualified as Http
 import Network.HTTP.Types.Header qualified as Http
 import Network.Wai qualified as Wai
 import Web.Minion
+import Web.Minion.Auth.Cookie
 import Web.Minion.Client.Types (
   ApplyAuth (..),
   AuthParam,
  )
-import Web.Minion.Auth.Cookie 
-import Data.Text
-import qualified Data.Text.Encoding as Text
-import GHC.TypeLits (symbolVal, KnownSymbol)
-import qualified Data.Text as Text
-import Data.Data (Proxy(..))
 
 defaultJwtAuthSettings ::
   (MonadIO m) =>
@@ -41,8 +41,10 @@ defaultJwtAuthSettings jwk audCheck check =
     }
 
 cookieJwtAuthSettings :: forall name payload m a. (Monad m, FromJSON payload) => JwtAuthSettings m payload a -> CookieAuthSettings m (JWTCookie name) a
-cookieJwtAuthSettings settings = CookieAuthSettings 
-  { check = \makeError (JWTCookie token) -> checkJwt makeError settings (Text.encodeUtf8 token) }
+cookieJwtAuthSettings settings =
+  CookieAuthSettings
+    { check = \makeError (JWTCookie token) -> checkJwt makeError settings (Text.encodeUtf8 token)
+    }
 
 data Bearer payload
 
@@ -60,7 +62,7 @@ data JwtAuthSettings m payload a = JwtAuthSettings
 
 newtype JWTCookie name = JWTCookie Text
 
-instance KnownSymbol name => IsCookie (JWTCookie name) where
+instance (KnownSymbol name) => IsCookie (JWTCookie name) where
   parseCookie = Right . JWTCookie
   cookieName = Text.pack $ symbolVal (Proxy @name)
 
@@ -72,7 +74,6 @@ instance (FromJSON a) => FromJSON (JwtPayload a) where
     JwtPayload
       <$> parseJSON v
       <*> parseJSON v
-
 
 instance (MonadIO m, FromJSON payload) => IsAuth (Bearer payload) m a where
   type Settings (Bearer payload) m a = JwtAuthSettings m payload a
@@ -95,10 +96,10 @@ instance ApplyAuth (Bearer a) where
 
 checkJwt :: forall payload m a. (Monad m, FromJSON payload) => MakeError -> JwtAuthSettings m payload a -> Bytes.ByteString -> m (AuthResult a)
 checkJwt makeError JwtAuthSettings{..} token = do
-    jwk_ <- jwk
-    now <- getNow
-    settings <- validationSettings
-    payload <- Jose.runJOSE do
-      jwt <- Jose.decodeCompact $ Bytes.Lazy.fromStrict token
-      Jose.verifyJWTAt settings jwk_ now jwt
-    check makeError payload
+  jwk_ <- jwk
+  now <- getNow
+  settings <- validationSettings
+  payload <- Jose.runJOSE do
+    jwt <- Jose.decodeCompact $ Bytes.Lazy.fromStrict token
+    Jose.verifyJWTAt settings jwk_ now jwt
+  check makeError payload

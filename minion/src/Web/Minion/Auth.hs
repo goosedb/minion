@@ -3,6 +3,7 @@
 module Web.Minion.Auth (auth, Auth (..), AuthResult (..), IsAuth (..), UnwindAuth (..)) where
 
 import Data.Kind (Type)
+import Data.Text (Text)
 import Data.Void (Void, absurd)
 import Network.Wai qualified as Wai
 import Web.Minion.Args (GetByType (getByType), HList, WithReq)
@@ -10,7 +11,6 @@ import Web.Minion.Error
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Request
 import Web.Minion.Router
-import Data.Text (Text)
 
 newtype Auth (auths :: [Type]) a = Auth a
 
@@ -20,7 +20,7 @@ instance IsRequest (Auth auths a) where
 
 data AuthResult a
   = Indefinite
-  | BadAuth Text 
+  | BadAuth Text
   | Authenticated a
   deriving (Functor)
 

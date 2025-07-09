@@ -7,9 +7,9 @@ import Crypto.JWT (JWTError, encodeCompact, signJWT)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.ByteString.Lazy qualified as Bytes.Lazy
 import Data.Functor (($>))
+import Data.Text qualified as Text
 import Data.Text.Encoding qualified
 import Data.Text.IO qualified
-import Data.Text qualified as Text
 import GHC.Generics (Generic)
 import Network.HTTP.Types.Status qualified as Http
 import System.Environment (getArgs)

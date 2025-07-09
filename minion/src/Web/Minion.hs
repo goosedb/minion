@@ -56,6 +56,7 @@ module Web.Minion (
   -- ** Server
   ApplicationM,
   MinionSettings (..),
+  RouteSettings (..),
   MatchedData (..),
   MatchedPiece (..),
   MatchedHeader (..),
@@ -64,6 +65,7 @@ module Web.Minion (
   serveWithSettings,
   serveWithSettingsAndParams,
   defaultMinionSettings,
+  defaultRouteSettings,
   defaultErrorBuilders,
 
   -- ** Exceptions
@@ -230,7 +232,7 @@ data MinionSettings m = MinionSettings
   { notFound :: m Wai.Response
   , httpError :: ServerError -> m Wai.Response
   , errorBuilders :: ErrorBuilders
-  , withMatchedData :: forall a. MatchedData -> m a -> m a
+  , routeSettings :: RouteSettings m
   }
 
 {-# INLINE serve #-}
@@ -243,7 +245,7 @@ defaultMinionSettings =
     { notFound = pure (Wai.responseBuilder Http.status404 [] mempty)
     , httpError = \ServerError{..} -> pure $ Wai.responseBuilder status headers (Bytes.Builder.fromLazyByteString body)
     , errorBuilders = defaultErrorBuilders
-    , withMatchedData = \_ x -> x
+    , routeSettings = defaultRouteSettings
     }
 
 defaultErrorBuilders :: ErrorBuilders
@@ -267,7 +269,7 @@ serveWithSettings settings = serveWithSettingsAndParams settings RHNil
 serveWithSettingsAndParams :: (IO.MonadIO m, Exc.MonadCatch m) => MinionSettings m -> RHList params -> Router' i params m -> ApplicationM m
 serveWithSettingsAndParams MinionSettings{..} params router req resp =
   Exc.catches @[]
-    (route withMatchedData errorBuilders (RoutingState (filter (not . Text.null) $ Http.pathInfo req) [] [] []) params router req resp)
+    (route routeSettings errorBuilders (RoutingState (filter (not . Text.null) $ Http.pathInfo req) [] [] []) params router req resp)
     [ Exc.Handler \(NoMatch e) -> maybe notFound httpError e >>= IO.liftIO . resp
     , Exc.Handler $ httpError >=> IO.liftIO . resp
     ]

@@ -84,6 +84,8 @@ data MatchedData = MatchedData
   }
   deriving (Eq, Ord, Show, Generic)
 
+data CaptureResult a = CaptureServerError ServerError | CaptureNoMatch (Maybe ServerError) | Captured a
+
 data Router' (i :: [Type]) (ts :: Type) m where
   Piece ::
     -- | .
@@ -103,7 +105,7 @@ data Router' (i :: [Type]) (ts :: Type) m where
     forall a ts m i.
     (I.Introspection i I.Captures a) =>
     -- | Parse pieces
-    (MakeError -> [Text] -> m [a]) ->
+    (MakeError -> [Text] -> CaptureResult [a]) ->
     -- | Placeholder
     Text ->
     Router' i (ts :+ WithPieces a) m ->
@@ -112,7 +114,7 @@ data Router' (i :: [Type]) (ts :: Type) m where
     forall a ts m i.
     (I.Introspection i I.Capture a) =>
     -- | Parse piece
-    (MakeError -> Text -> m a) ->
+    (MakeError -> Text -> CaptureResult a) ->
     -- | Placeholder
     Text ->
     Router' i (ts :+ WithPiece a) m ->
@@ -176,17 +178,31 @@ data Router' (i :: [Type]) (ts :: Type) m where
     Router' i ts m ->
     Router' i' ts m
 
+data RouteSettings m = RouteSettings
+  { withMatchedData :: forall a. MatchedData -> m a -> m a
+  -- ^ Called before any action of in `m` is executed
+  , onHandle :: forall a. m a -> m a
+  -- ^ Called when all parts of the request are matched, wraps logic of 'Handle'
+  }
+
+defaultRouteSettings :: RouteSettings m
+defaultRouteSettings =
+  RouteSettings
+    { withMatchedData = \_ x -> x
+    , onHandle = id
+    }
+
 {-# INLINE route #-}
 route ::
   forall m ts i.
   (IO.MonadIO m, Exc.MonadCatch m) =>
-  (forall a. MatchedData -> m a -> m a) ->
+  RouteSettings m ->
   ErrorBuilders ->
   RoutingState ->
   RHList ts ->
   Router' i ts m ->
   ApplicationM m
-route withMatchedData ErrorBuilders{..} = go
+route routeSettings ErrorBuilders{..} = go
  where
   {-# INLINE go #-}
   go :: forall ts' i'. (IO.MonadIO m, Exc.MonadCatch m) => RoutingState -> RHList ts' -> Router' i' ts' m -> ApplicationM m
@@ -197,8 +213,8 @@ route withMatchedData ErrorBuilders{..} = go
       MapArgs f r -> go state (f args) r
       Description _ r -> go state args r
       HideIntrospection r -> go state args r
-      Handle @o method f -> routeHandle withMatchedData state args method f
-      Raw f -> routeRaw withMatchedData state args f
+      Handle @o method f -> routeHandle routeSettings state args method f
+      Raw f -> routeRaw routeSettings state args f
       Request @f get r -> \req resp -> do
         once <- memoize $ get bodyErrorBuilder req
         go state (WithReq once :#! args) r req resp
@@ -217,13 +233,18 @@ route withMatchedData ErrorBuilders{..} = go
         (t : ts) | txt == t -> go RoutingState{path = ts, matchedPath = StaticPiece txt : matchedPath, ..} args r
         _ -> \_ _ -> throwMIO (NoMatch Nothing)
       Captures parse name r -> \req resp -> do
-        parsed <- parse (captureErrorBuilder req) path
+        parsed <- throwCaptureError $ parse (captureErrorBuilder req) path
         go RoutingState{path = [], matchedPath = DynamicPieces path name : matchedPath, ..} (WithPieces parsed :#! args) r req resp
       Capture parse name r -> \req resp -> case path of
         (t : ts) -> do
-          v <- parse (captureErrorBuilder req) t
+          v <- throwCaptureError $ parse (captureErrorBuilder req) t
           go RoutingState{path = ts, matchedPath = DynamicPiece t name : matchedPath, ..} (WithPiece v :#! args) r req resp
         _ -> throwMIO (NoMatch Nothing)
+
+  throwCaptureError = \case
+    CaptureServerError serverError -> Exc.throwM serverError
+    CaptureNoMatch serverError -> Exc.throwM (NoMatch serverError)
+    Captured a -> pure a
 
 memoize :: (IO.MonadIO m) => m a -> m (m a)
 memoize action = do
@@ -243,37 +264,37 @@ memoize action = do
 routeRaw ::
   forall m ts st.
   (IO.MonadIO m, HandleArgs ts st m) =>
-  (forall a. MatchedData -> m a -> m a) ->
+  RouteSettings m ->
   RoutingState ->
   RHList ts ->
   (Wai.Request -> HList (DelayedArgs st) -> m Wai.Response) ->
   ApplicationM m
-routeRaw withMatchedData RoutingState{..} args f req resp = do
+routeRaw RouteSettings{..} RoutingState{..} args f req resp = do
   let method = Wai.requestMethod req
   let matched = MatchedData{path = reverse matchedPath, headers = matchedHeaders, query = matchedQuery, method}
-  args' <- runDelayed (reverseHList (revHListToList args))
   withMatchedData matched do
-    f req args' >>= IO.liftIO . resp
+    args' <- runDelayed (reverseHList (revHListToList args))
+    onHandle $ f req args' >>= IO.liftIO . resp
 
 {-# INLINE routeHandle #-}
 routeHandle ::
   forall m o ts st.
   (IO.MonadIO m, ToResponse m o, CanRespond o, HandleArgs ts st m) =>
-  (forall a. MatchedData -> m a -> m a) ->
+  RouteSettings m ->
   RoutingState ->
   RHList ts ->
   Http.Method ->
   (HList (DelayedArgs st) -> m o) ->
   ApplicationM m
-routeHandle withMatchedData RoutingState{..} args method f req resp = do
+routeHandle RouteSettings{..} RoutingState{..} args method f req resp = do
   checkHandler req path method
   let acceptHeader = lookupHeader req Http.hAccept
   if canRespond @o acceptHeader
     then do
       let matched = MatchedData{path = reverse matchedPath, headers = matchedHeaders, query = matchedQuery, method}
-      args' <- runDelayed (reverseHList (revHListToList args))
       withMatchedData matched do
-        f args' >>= (toResponse @m @o acceptHeader >=> IO.liftIO . resp)
+        args' <- runDelayed (reverseHList (revHListToList args))
+        onHandle $ f args' >>= (toResponse @m @o acceptHeader >=> IO.liftIO . resp)
     else IO.liftIO $ resp $ Wai.responseBuilder Http.status406 [] mempty
 
 {-# INLINE goThrough #-}

@@ -1,6 +1,5 @@
 module Web.Minion.Request.Path (capture, captures, piece) where
 
-import Control.Monad.Catch (MonadThrow (throwM))
 import Data.Bifunctor (Bifunctor (..))
 import Data.String (IsString (..))
 import Data.String.Conversions (ConvertibleStrings (..))
@@ -8,7 +7,6 @@ import Data.Text (Text)
 import Network.HTTP.Types qualified as Http
 import Web.HttpApiData (FromHttpApiData (parseUrlPiece), parseUrlPieces)
 import Web.Minion.Args.Internal
-import Web.Minion.Error (NoMatch (NoMatch))
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Router.Internal
 
@@ -21,15 +19,15 @@ import Web.Minion.Router.Internal
 {-# INLINE capture #-}
 capture ::
   forall b m i ts.
-  (FromHttpApiData b, I.Introspection i I.Capture b, MonadThrow m) =>
+  (FromHttpApiData b, I.Introspection i I.Capture b) =>
   -- } .
   Text ->
   ValueCombinator i (WithPiece b) ts m
 capture =
   Capture @b
     ( \makeError ->
-        either throwM pure
-          . first (NoMatch . Just . makeError Http.status400 . convertString)
+        either CaptureNoMatch Captured
+          . first (Just . makeError Http.status400 . convertString)
           . parseUrlPiece
     )
 
@@ -42,15 +40,15 @@ capture =
 {-# INLINE captures #-}
 captures ::
   forall b m i ts.
-  (FromHttpApiData b, I.Introspection i I.Captures b, MonadThrow m) =>
+  (FromHttpApiData b, I.Introspection i I.Captures b) =>
   -- | .
   Text ->
   ValueCombinator i (WithPieces b) ts m
 captures =
   Captures @b
     \makeError ->
-      either throwM pure
-        . first (NoMatch . Just . makeError Http.status400 . convertString)
+      either CaptureNoMatch Captured
+        . first (Just . makeError Http.status400 . convertString)
         . parseUrlPieces
 
 {- | Could be omitted with `OverloadedStrings`

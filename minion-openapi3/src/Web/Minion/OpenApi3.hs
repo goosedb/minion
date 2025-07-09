@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedLabels #-}
-
 module Web.Minion.OpenApi3 (
   OpenApi3,
   AttachRequestSchema (..),
@@ -44,7 +42,7 @@ import Web.Minion.Auth.Basic (Basic)
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Media
 import Web.Minion.Response (Redirect)
-import Web.Minion.Response.Header (AddHeader, AddHeaders)
+import Web.Minion.Response.Header (AddHeader, AddHeaders, RawHeaderValue)
 import Web.Minion.Response.Header.Cookie (WithCookie)
 import Web.Minion.Response.Status
 import Web.Minion.Response.Union
@@ -265,13 +263,19 @@ instance ToResponses (Union '[]) where
   toResponses = (mempty, mempty)
 
 instance (ToResponses a) => ToResponses (WithCookie a) where
-  toResponses = toResponses @(AddHeaders '[] a)
+  toResponses = toResponses @(AddHeaders '[AddHeader "Set-Cookie" RawHeaderValue] a)
 
 class ToHeadersSchema (hs :: [Type]) where
   toHeadersSchema :: [(HeaderName, OpenApi3.Header)]
 
-instance (ToHeadersSchema hs, KnownSymbol name) => ToHeadersSchema (AddHeader name typ ': hs) where
-  toHeadersSchema = (hn, mempty) : toHeadersSchema @hs
+class ToResponseHeader a where
+  toResponseHeader :: OpenApi3.Header
+
+instance ToResponseHeader RawHeaderValue where
+  toResponseHeader = mempty
+
+instance (ToHeadersSchema hs, KnownSymbol name, ToResponseHeader typ) => ToHeadersSchema (AddHeader name typ ': hs) where
+  toHeadersSchema = (hn, toResponseHeader @typ) : toHeadersSchema @hs
    where
     hn = Text.pack $ symbolVal (Proxy @name)
 
@@ -284,11 +288,11 @@ instance (ToResponses a, ToHeadersSchema hs) => ToResponses (AddHeaders hs a) wh
     (rs, refs) = toResponses @a
     updateDefault =
       OpenApi3.default_ %~ fmap \case
-        OpenApi3.Ref a -> undefined
+        OpenApi3.Ref a -> OpenApi3.Ref a
         OpenApi3.Inline resp -> OpenApi3.Inline $ addHeaders @hs resp
     updateOthers =
       OpenApi3.responses %~ fmap \case
-        OpenApi3.Ref a -> undefined
+        OpenApi3.Ref a -> OpenApi3.Ref a
         OpenApi3.Inline resp -> OpenApi3.Inline $ addHeaders @hs resp
 
 addHeaders :: forall hs. (ToHeadersSchema hs) => Response -> Response
