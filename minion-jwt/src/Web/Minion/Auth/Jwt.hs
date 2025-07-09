@@ -1,7 +1,6 @@
 module Web.Minion.Auth.Jwt where
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Trans.Maybe (MaybeT (..))
 import Crypto.JOSE qualified as Jose
 import Crypto.JWT (JWTError)
 import Crypto.JWT qualified as Jose
@@ -19,13 +18,12 @@ import Web.Minion.Client.Types (
   ApplyAuth (..),
   AuthParam,
  )
-
-data JwtAuthSettings m payload a = JwtAuthSettings
-  { getNow :: m Time.UTCTime
-  , jwk :: m Jose.JWK
-  , validationSettings :: m Jose.JWTValidationSettings
-  , check :: MakeError -> Either JWTError (JwtPayload payload) -> m (AuthResult a)
-  }
+import Web.Minion.Auth.Cookie 
+import Data.Text
+import qualified Data.Text.Encoding as Text
+import GHC.TypeLits (symbolVal, KnownSymbol)
+import qualified Data.Text as Text
+import Data.Data (Proxy(..))
 
 defaultJwtAuthSettings ::
   (MonadIO m) =>
@@ -42,10 +40,29 @@ defaultJwtAuthSettings jwk audCheck check =
     , check = check
     }
 
+cookieJwtAuthSettings :: forall name payload m a. (Monad m, FromJSON payload) => JwtAuthSettings m payload a -> CookieAuthSettings m (JWTCookie name) a
+cookieJwtAuthSettings settings = CookieAuthSettings 
+  { check = \makeError (JWTCookie token) -> checkJwt makeError settings (Text.encodeUtf8 token) }
+
+data Bearer payload
+
 data JwtPayload a = JwtPayload
   { claims :: Jose.ClaimsSet
   , payload :: a
   }
+
+data JwtAuthSettings m payload a = JwtAuthSettings
+  { getNow :: m Time.UTCTime
+  , jwk :: m Jose.JWK
+  , validationSettings :: m Jose.JWTValidationSettings
+  , check :: MakeError -> Either JWTError (JwtPayload payload) -> m (AuthResult a)
+  }
+
+newtype JWTCookie name = JWTCookie Text
+
+instance KnownSymbol name => IsCookie (JWTCookie name) where
+  parseCookie = Right . JWTCookie
+  cookieName = Text.pack $ symbolVal (Proxy @name)
 
 instance Jose.HasClaimsSet (JwtPayload a) where
   claimsSet f JwtPayload{..} = f claims <&> \c -> JwtPayload{claims = c, ..}
@@ -56,27 +73,18 @@ instance (FromJSON a) => FromJSON (JwtPayload a) where
       <$> parseJSON v
       <*> parseJSON v
 
-data Bearer payload
 
 instance (MonadIO m, FromJSON payload) => IsAuth (Bearer payload) m a where
   type Settings (Bearer payload) m a = JwtAuthSettings m payload a
-  toAuth JwtAuthSettings{..} buildError req = do
-    jwk_ <- jwk
-    now <- getNow
-    settings <- validationSettings
-    payload <- Jose.runJOSE $ runMaybeT do
-      authHeader <- Wai.requestHeaders req & lookup Http.hAuthorization & hoistMaybe
-      compact <- hoistMaybe $ Bytes.stripPrefix prefix authHeader
-      jwt <- Jose.decodeCompact $ Bytes.Lazy.fromStrict compact
-      Jose.verifyJWTAt settings jwk_ now jwt
-    case payload of
-      Left e -> check (buildError req) (Left e)
-      Right Nothing -> pure Indefinite
-      Right (Just (v :: JwtPayload payload)) -> check (buildError req) (Right v)
+  toAuth settings buildError req = do
+    let mbToken = do
+          authHeader <- Wai.requestHeaders req & lookup Http.hAuthorization
+          Bytes.stripPrefix prefix authHeader
+    case mbToken of
+      Nothing -> pure Indefinite
+      Just token -> checkJwt (buildError req) settings token
    where
     prefix = "Bearer "
-
-    hoistMaybe = MaybeT . pure
 
 newtype JwtToken = JwtToken Bytes.ByteString
 
@@ -84,3 +92,13 @@ instance ApplyAuth (Bearer a) where
   type AuthParam (Bearer a) = JwtToken
   applyAuth (JwtToken token) req = pure do
     req{Http.requestHeaders = (Http.hAuthorization, "Bearer " <> token) : Http.requestHeaders req}
+
+checkJwt :: forall payload m a. (Monad m, FromJSON payload) => MakeError -> JwtAuthSettings m payload a -> Bytes.ByteString -> m (AuthResult a)
+checkJwt makeError JwtAuthSettings{..} token = do
+    jwk_ <- jwk
+    now <- getNow
+    settings <- validationSettings
+    payload <- Jose.runJOSE do
+      jwt <- Jose.decodeCompact $ Bytes.Lazy.fromStrict token
+      Jose.verifyJWTAt settings jwk_ now jwt
+    check makeError payload

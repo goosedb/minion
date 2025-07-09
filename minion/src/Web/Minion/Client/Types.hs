@@ -18,12 +18,14 @@ import Web.HttpApiData qualified as Http
 import Web.Minion (RespBody)
 import Web.Minion.Auth (Auth)
 import Web.Minion.Auth.Basic (Basic, BasicAuth (..), Password (..), Username (..))
-import Web.Minion.Codec.Decode (DecodeBody (..))
+import Web.Minion.Codec.Decode (DecodeBody (..), DecodeBodyStream (decodeBodyStream))
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Request.Body (Encode (..), ParseBodyError (..), ReqBody)
 import Web.Minion.Response.Header (AddHeaders)
 import Web.Minion.Response.Status (IsStatus (..))
 import Web.Minion.Response.Union (Inject (inject), Union (..))
+import Web.Minion.Response.Header.Cookie (WithCookie)
+import Web.Minion.Response.Body (RespBodyStream)
 
 data Client
 
@@ -99,6 +101,30 @@ instance Show ResponseStream where
 class (Typeable v) => ResponseClient v where
   type ResponseForClient v :: Kind.Type
   acceptResponse :: Http.Response Http.BodyReader -> IO (Either ClientError (ResponseForClient v))
+
+instance ResponseClient a => ResponseClient (WithCookie a) where 
+  type ResponseForClient (WithCookie a) = ResponseForClient a
+  acceptResponse = acceptResponse @a 
+
+data StreamResponse a = StreamResponse { response :: a, close :: IO () }
+
+instance (Typeable (RespBodyStream status cts a), DecodeBodyStream cts a, IsStatus status) => ResponseClient (RespBodyStream status cts a) where
+  type ResponseForClient (RespBodyStream status cts a) = StreamResponse a
+
+  acceptResponse resp = do
+    let close = Http.responseClose resp
+    let accept = do
+          let ct = lookup Http.hContentType $ Http.responseHeaders resp
+          let readChunk = Http.brRead (Http.responseBody resp)
+          decodeBodyStream @cts @a (fromMaybe mempty ct) readChunk <&> \case
+            Left err -> case err of 
+              FailedToParse e -> Left (DecodeFailure e (void resp))
+              UnsupportedMime m -> Left (UnsupportedContentType m (void resp))
+              InvalidMime _ -> Left $ InvalidContentTypeHeader (void resp)
+            Right a -> Right (StreamResponse a close)
+    if Http.responseStatus resp == httpStatus @status then accept else pure $ Left $ UnexpectedCode (ResponseStream <$> resp)
+
+
 instance (Typeable (RespBody status cts a), DecodeBody cts a, IsStatus status) => ResponseClient (RespBody status cts a) where
   type ResponseForClient (RespBody status cts a) = a
 

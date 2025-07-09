@@ -9,6 +9,7 @@ import Data.ByteString.Lazy qualified as Bytes.Lazy
 import Data.Functor (($>))
 import Data.Text.Encoding qualified
 import Data.Text.IO qualified
+import Data.Text qualified as Text
 import GHC.Generics (Generic)
 import Network.HTTP.Types.Status qualified as Http
 import System.Environment (getArgs)
@@ -45,7 +46,7 @@ myAuth = auth @'[Bearer JwtUserInfo] @UserId (asks authCtx) \makeError -> \case
 
 jwtSettings :: JwtAuthSettings M JwtUserInfo UserId
 jwtSettings = defaultJwtAuthSettings (pure myJwk) (const True) do
-  const (pure . either (const BadAuth) (\JwtPayload{payload = JwtUserInfo{..}} -> Authenticated userId))
+  const (pure . either (BadAuth . Text.pack . show) (\JwtPayload{payload = JwtUserInfo{..}} -> Authenticated userId))
 
 myJwk :: JWK
 myJwk = fromOctets @Bytes.Lazy.ByteString "really secret and long enough key"

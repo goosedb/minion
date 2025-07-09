@@ -26,7 +26,7 @@ newtype UserId = UserId Int
 
 basicAuthSettings :: BasicAuthSettings M UserId
 basicAuthSettings =
-  BasicAuthSettings \_ ba -> maybe BadAuth (Authenticated . UserId) . elemIndex ba <$> ask
+  BasicAuthSettings \_ ba -> maybe (BadAuth "Unknown user") (Authenticated . UserId) . elemIndex ba <$> ask
 
 myAuth :: ValueCombinator '[] (WithReq M (Auth '[Basic] UserId)) ts M
 myAuth = auth @'[Basic] @UserId (pure $ basicAuthSettings :# HNil) \makeError -> \case

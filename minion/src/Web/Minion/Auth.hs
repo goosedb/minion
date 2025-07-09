@@ -10,6 +10,7 @@ import Web.Minion.Error
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Request
 import Web.Minion.Router
+import Data.Text (Text)
 
 newtype Auth (auths :: [Type]) a = Auth a
 
@@ -19,7 +20,7 @@ instance IsRequest (Auth auths a) where
 
 data AuthResult a
   = Indefinite
-  | BadAuth
+  | BadAuth Text 
   | Authenticated a
   deriving (Functor)
 
@@ -71,7 +72,7 @@ auth ctxm cont = Request \errorBuilder req -> do
   go auths
     >>= fmap Auth . \case
       Authenticated a -> pure a
-      BadAuth -> absurd <$> cont (errorBuilder req) BadAuth
-      Indefinite -> absurd <$> cont (errorBuilder req) BadAuth
+      BadAuth a -> absurd <$> cont (errorBuilder req) (BadAuth a)
+      Indefinite -> absurd <$> cont (errorBuilder req) Indefinite
  where
   auths = unwindAuth @ctx @auths @m @a

@@ -77,6 +77,7 @@ library
     Web.Minion.Codec.Decode.Internal
     Web.Minion.Codec.Encode
     Web.Minion.Codec.Encode.Internal
+    Web.Minion.Request.Header.Cookie
     Web.Minion.Error
     Web.Minion.Introspect
     Web.Minion.Introspect.Internal
@@ -100,6 +101,8 @@ library
     Web.Minion.Request.Path
     Web.Minion.Response
     Web.Minion.Response.Body
+    Web.Minion.Response.Header.Cookie
+    Web.Minion.Auth.Cookie
     Web.Minion.Response.Header
     Web.Minion.Response.Status
     Web.Minion.Response.Union
@@ -117,6 +120,7 @@ library
     , containers
     , exceptions
     , filepath
+    , cookie
     , http-api-data
     , http-client
     , http-media

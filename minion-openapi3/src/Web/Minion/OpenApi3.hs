@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedLabels #-}
+
 module Web.Minion.OpenApi3 (
   OpenApi3,
   AttachRequestSchema (..),
@@ -30,16 +32,20 @@ import Data.Data (Proxy (..))
 import Data.HashMap.Strict.InsOrd qualified as HM
 import Data.HashMap.Strict.InsOrd qualified as InsOrdHashMap
 import Data.HashSet.InsOrd qualified as InsOrdHashSet
+import Data.Kind (Type)
+import Data.OpenApi qualified as OpenApi3
 import Data.OpenApi.Declare (runDeclare)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
+import GHC.TypeLits (KnownSymbol, symbolVal)
 import Network.HTTP.Types qualified as Http
 import Web.Minion.Auth.Basic (Basic)
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Media
 import Web.Minion.Response (Redirect)
-import Web.Minion.Response.Header (AddHeaders)
+import Web.Minion.Response.Header (AddHeader, AddHeaders)
+import Web.Minion.Response.Header.Cookie (WithCookie)
 import Web.Minion.Response.Status
 import Web.Minion.Response.Union
 
@@ -258,11 +264,37 @@ instance (ToResponses a, ToResponses (Union as)) => ToResponses (Union (a ': as)
 instance ToResponses (Union '[]) where
   toResponses = (mempty, mempty)
 
-instance (ToResponses a) => ToResponses (AddHeaders '[] a) where
-  toResponses = toResponses @a
+instance (ToResponses a) => ToResponses (WithCookie a) where
+  toResponses = toResponses @(AddHeaders '[] a)
 
-instance (ToResponses a) => ToResponses (AddHeaders hs a) where
-  toResponses = toResponses @a
+class ToHeadersSchema (hs :: [Type]) where
+  toHeadersSchema :: [(HeaderName, OpenApi3.Header)]
+
+instance (ToHeadersSchema hs, KnownSymbol name) => ToHeadersSchema (AddHeader name typ ': hs) where
+  toHeadersSchema = (hn, mempty) : toHeadersSchema @hs
+   where
+    hn = Text.pack $ symbolVal (Proxy @name)
+
+instance ToHeadersSchema '[] where
+  toHeadersSchema = []
+
+instance (ToResponses a, ToHeadersSchema hs) => ToResponses (AddHeaders hs a) where
+  toResponses = (rs & updateDefault & updateOthers, refs)
+   where
+    (rs, refs) = toResponses @a
+    updateDefault =
+      OpenApi3.default_ %~ fmap \case
+        OpenApi3.Ref a -> undefined
+        OpenApi3.Inline resp -> OpenApi3.Inline $ addHeaders @hs resp
+    updateOthers =
+      OpenApi3.responses %~ fmap \case
+        OpenApi3.Ref a -> undefined
+        OpenApi3.Inline resp -> OpenApi3.Inline $ addHeaders @hs resp
+
+addHeaders :: forall hs. (ToHeadersSchema hs) => Response -> Response
+addHeaders =
+  OpenApi3.headers
+    %~ \hm -> foldl (\acc (k, v) -> InsOrdHashMap.insert k (Inline v) acc) hm (toHeadersSchema @hs)
 
 class ToResponses a where
   toResponses :: (Responses, Definitions Schema)
