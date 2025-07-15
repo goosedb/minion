@@ -93,6 +93,7 @@ library
     , openapi3
     , template-haskell
     , text
+    , wai
 
   hs-source-dirs:   src
   default-language: Haskell2010

@@ -10,10 +10,9 @@ app = serve api
 api :: Router Void IO
 api =
   [ hideIntrospection publicApi
-  , openapi3 config publicApi
+  , "openapi" /> openapi3 publicApi
   ]
  where
-  config = OpenApi3Config "openapi" "openapi3.json" "static"
 
 publicApi :: Router' '[OpenApi3] Void IO
 publicApi =

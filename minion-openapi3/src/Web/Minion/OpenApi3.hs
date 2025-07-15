@@ -39,6 +39,7 @@ import Data.Text.Encoding qualified as Text
 import GHC.TypeLits (KnownSymbol, symbolVal)
 import Network.HTTP.Types qualified as Http
 import Web.Minion.Auth.Basic (Basic)
+import Web.Minion.Auth.Cookie (Cookie, IsCookie (cookieName))
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Media
 import Web.Minion.Response (Redirect)
@@ -115,6 +116,16 @@ instance AttachSecuritySchema (AsCookieJwt a) where
     securityScheme =
       SecurityScheme
         { _securitySchemeType = SecuritySchemeHttp $ HttpSchemeBearer $ Just "JWT"
+        , _securitySchemeDescription = Just "Cookie Authentication"
+        }
+
+instance (IsCookie a) => AttachSecuritySchema (Cookie a) where
+  attachSecuritySchema = addSecurityRequirement identifier . addSecurityScheme identifier securityScheme
+   where
+    identifier = "Cookie"
+    securityScheme =
+      SecurityScheme
+        { _securitySchemeType = SecuritySchemeApiKey $ ApiKeyParams (cookieName @a) ApiKeyCookie
         , _securitySchemeDescription = Just "Cookie Authentication"
         }
 

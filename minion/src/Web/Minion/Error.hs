@@ -9,6 +9,7 @@ import Network.Wai qualified as Wai
 
 {- | This exception makes the Minion router try to match another path.
 If there are no more options, control will be passed to the `Web.Minion.notFound` function if wrapped `ServerError` is absent, or to `Web.Minion.httpError` if it is present.
+Although you can throw this exception from any place in the Router where `m` is allowed, it is not recommended to do so.
 -}
 newtype NoMatch = NoMatch (Maybe ServerError)
   deriving stock (Show)

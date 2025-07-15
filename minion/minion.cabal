@@ -72,12 +72,12 @@ library
     Web.Minion.Args.Internal
     Web.Minion.Auth
     Web.Minion.Auth.Basic
+    Web.Minion.Auth.Cookie
     Web.Minion.Client.Types
     Web.Minion.Codec.Decode
     Web.Minion.Codec.Decode.Internal
     Web.Minion.Codec.Encode
     Web.Minion.Codec.Encode.Internal
-    Web.Minion.Request.Header.Cookie
     Web.Minion.Error
     Web.Minion.Introspect
     Web.Minion.Introspect.Internal
@@ -90,20 +90,20 @@ library
     Web.Minion.Request
     Web.Minion.Request.Body
     Web.Minion.Request.Header
+    Web.Minion.Request.Header.Cookie
     Web.Minion.Request.Header.Internal
     Web.Minion.Request.Method
+    Web.Minion.Request.Path
     Web.Minion.Request.Query
     Web.Minion.Request.Query.Flag
     Web.Minion.Request.Query.Form
     Web.Minion.Request.Query.Internal
     Web.Minion.Request.Query.Param
     Web.Minion.Request.Query.Params
-    Web.Minion.Request.Path
     Web.Minion.Response
     Web.Minion.Response.Body
-    Web.Minion.Response.Header.Cookie
-    Web.Minion.Auth.Cookie
     Web.Minion.Response.Header
+    Web.Minion.Response.Header.Cookie
     Web.Minion.Response.Status
     Web.Minion.Response.Union
     Web.Minion.Router
@@ -118,9 +118,9 @@ library
     , bytestring
     , case-insensitive
     , containers
+    , cookie
     , exceptions
     , filepath
-    , cookie
     , http-api-data
     , http-client
     , http-media
@@ -141,10 +141,10 @@ test-suite test
   build-depends:
     , aeson
     , base
-    , cookie
     , binary
     , bytestring
     , case-insensitive
+    , cookie
     , hspec
     , hspec-expectations
     , http-api-data

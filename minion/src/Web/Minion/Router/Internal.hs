@@ -5,7 +5,6 @@
 
 module Web.Minion.Router.Internal where
 
-import Control.Monad ((>=>))
 import Control.Monad.IO.Class qualified as IO
 import Data.ByteString (ByteString)
 import Data.String (IsString (..))
@@ -181,15 +180,17 @@ data Router' (i :: [Type]) (ts :: Type) m where
 data RouteSettings m = RouteSettings
   { withMatchedData :: forall a. MatchedData -> m a -> m a
   -- ^ Called before any action of in `m` is executed
-  , onHandle :: forall a. m a -> m a
+  , onHandle :: m Wai.Response -> m Wai.Response
   -- ^ Called when all parts of the request are matched, wraps logic of 'Handle'
+  , onResponseSent :: m ()
   }
 
-defaultRouteSettings :: RouteSettings m
+defaultRouteSettings :: (Monad m) => RouteSettings m
 defaultRouteSettings =
   RouteSettings
     { withMatchedData = \_ x -> x
     , onHandle = id
+    , onResponseSent = pure ()
     }
 
 {-# INLINE route #-}
@@ -274,7 +275,8 @@ routeRaw RouteSettings{..} RoutingState{..} args f req resp = do
   let matched = MatchedData{path = reverse matchedPath, headers = matchedHeaders, query = matchedQuery, method}
   withMatchedData matched do
     args' <- runDelayed (reverseHList (revHListToList args))
-    onHandle $ f req args' >>= IO.liftIO . resp
+    response <- onHandle $ f req args'
+    IO.liftIO (resp response) <* onResponseSent
 
 {-# INLINE routeHandle #-}
 routeHandle ::
@@ -289,13 +291,15 @@ routeHandle ::
 routeHandle RouteSettings{..} RoutingState{..} args method f req resp = do
   checkHandler req path method
   let acceptHeader = lookupHeader req Http.hAccept
+  let sendResponse = IO.liftIO . resp
   if canRespond @o acceptHeader
     then do
       let matched = MatchedData{path = reverse matchedPath, headers = matchedHeaders, query = matchedQuery, method}
       withMatchedData matched do
         args' <- runDelayed (reverseHList (revHListToList args))
-        onHandle $ f args' >>= (toResponse @m @o acceptHeader >=> IO.liftIO . resp)
-    else IO.liftIO $ resp $ Wai.responseBuilder Http.status406 [] mempty
+        response <- onHandle $ f args' >>= toResponse @m @o acceptHeader
+        sendResponse response <* onResponseSent
+    else sendResponse (Wai.responseBuilder Http.status406 [] mempty) <* onResponseSent
 
 {-# INLINE goThrough #-}
 goThrough :: (IO.MonadIO m, Exc.MonadCatch m) => NoMatch -> [m b] -> m b

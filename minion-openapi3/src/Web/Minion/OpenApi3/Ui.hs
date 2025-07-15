@@ -1,45 +1,50 @@
 module Web.Minion.OpenApi3.Ui (
   openapi3,
-  OpenApi3Config (..),
 ) where
 
 import Web.Minion hiding (description)
 
-import Control.Lens hiding (index)
+import Control.Lens hiding (index, (.>))
 import Control.Monad.IO.Class (MonadIO)
 import Data.Bifunctor (Bifunctor (..))
 import Data.String (IsString (..))
 import Data.Text qualified as Text
+import Network.Wai qualified as Wai
 import Text.Blaze
 import Text.Blaze.Html.Renderer.Utf8 (renderHtml)
-import Web.HttpApiData (ToHttpApiData (..))
 import Web.Minion.Files (indexTemplate, ui)
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Media.Html (Html)
 import Web.Minion.OpenApi3
+import Web.Minion.Request.Body (IsRequest (..))
 import Web.Minion.Response (Redirect (Redirect))
+import Web.Minion.Router (Router' (..))
 import Web.Minion.Static
 
-data OpenApi3Config = OpenApi3Config
-  { routePrefix :: String
-  , openapi3File :: FilePath
-  , staticDir :: FilePath
-  }
+newtype CurrentPath = CurrentPath Text.Text
+
+instance IsRequest CurrentPath where
+  type RequestValue CurrentPath = CurrentPath
+  getRequestValue = id
+
+currentPath :: (Monad m) => ValueCombinator '[] (WithReq m CurrentPath) ts m
+currentPath = Request \_ req -> pure $ CurrentPath $ Text.intercalate "/" $ Wai.pathInfo req
 
 openapi3 ::
   forall m ts st i.
-  (HandleArgs ts st m, MonadIO m, I.Elem OpenApi3 i) =>
-  OpenApi3Config ->
+  ( HandleArgs ts st m
+  , MonadIO m
+  , I.Elem OpenApi3 i
+  ) =>
   Router' i ts m ->
-  Router' '[] Void m
-openapi3 OpenApi3Config{..} r =
-  fromString routePrefix
-    /> [ handle @Redirect GET (pure $ Redirect indexHtmlPath)
-       , fromString openapi3File /> handleBody @Ok @'[Json] GET (pure $ generateOpenApi3 r)
-       , fromString staticDir /> [staticFiles defaultExtsMap ui', index_html /> getIndex]
-       ]
+  Router Void m
+openapi3 r =
+  [ currentPath .> handle @Redirect GET (pure . Redirect . indexHtmlPath)
+  , fromString "openapi.json" /> handleBody @Ok @'[Json] GET (pure $ generateOpenApi3 r)
+  , "static" /> [staticFiles defaultExtsMap ui', index_html /> getIndex]
+  ]
  where
-  indexHtmlPath = Text.pack $ routePrefix <> "/" <> staticDir <> "/" <> index_html
+  indexHtmlPath (CurrentPath route) = Text.pack $ Text.unpack route <> "/static/" <> index_html
 
   index_html :: (IsString s) => s
   index_html = "index.html"
@@ -49,7 +54,7 @@ openapi3 OpenApi3Config{..} r =
 
   index =
     indexTemplate
-      & Text.replace "SWAGGER_UI_SCHEMA" (toUrlPiece openapi3File)
-      & Text.replace "SWAGGER_UI_DIR" (toUrlPiece staticDir)
+      & Text.replace "SWAGGER_UI_SCHEMA" "openapi.json"
+      & Text.replace "SWAGGER_UI_DIR" "static"
       & preEscapedToMarkup
       & renderHtml
