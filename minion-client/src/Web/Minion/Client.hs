@@ -1,10 +1,11 @@
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE TupleSections #-}
 
 module Web.Minion.Client (makeClient, runClient, defaultClientEnv, ClientApp, ClientEnv (..), ClientM (..), Endpoint (..)) where
 
 import Control.Exception (catch)
 import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
+import Control.Monad.Reader (MonadReader (ask), ReaderT (runReaderT))
 import Data.Bool (bool)
 import Data.ByteString qualified as Bytes
 import Data.ByteString.Char8 qualified as Bytes.Char8
@@ -17,14 +18,16 @@ import Data.Sequence (Seq (..))
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding as Text.Encoding
+import Data.Time qualified as Time
 import Data.Traversable (for)
 import Data.Typeable (tyConModule, tyConPackage)
 import Data.Void (Void)
+import GHC.Conc (TVar, newTVarIO)
+import GHC.Conc qualified as Conc
 import Language.Haskell.TH.Syntax qualified as TH
 import Network.HTTP.Client (defaultManagerSettings, newManager)
 import Network.HTTP.Client qualified as Http
 import Network.HTTP.Types qualified as Http
-import Network.Wai qualified as Wai
 import Type.Reflection qualified as Typeable
 import Web.HttpApiData qualified as Http
 import Web.Minion (IsRequired (isRequired), MonadThrow)
@@ -34,21 +37,23 @@ import Web.Minion.Router qualified as R
 
 newtype Endpoint path a = Endpoint {client :: a}
 
-type ClientApp = Wai.Request -> ClientM Wai.Response
+type ClientApp a = Http.Request -> ClientM (Http.Response a)
 
 data ClientEnv = ClientEnv
   { manager :: Http.Manager
   , baseUrl :: Text
-  , middleware :: ClientApp -> ClientApp
+  , middleware :: forall a. ClientApp a -> ClientApp a
+  , cookies :: TVar Http.CookieJar
   }
 
 defaultClientEnv :: Text -> IO ClientEnv
 defaultClientEnv baseUrl = do
   manager <- newManager defaultManagerSettings
+  cookies <- newTVarIO mempty
   pure ClientEnv{middleware = id, ..}
 
 newtype ClientM a = ClientM {runClientM :: ReaderT ClientEnv IO a}
-  deriving newtype (Functor, Applicative, Monad, MonadThrow)
+  deriving newtype (Functor, Applicative, Monad, MonadThrow, MonadReader ClientEnv, MonadIO, MonadFail)
 
 runClient :: ClientEnv -> ClientM a -> IO a
 runClient env ClientM{..} = runReaderT runClientM env
@@ -99,18 +104,37 @@ makeClient = fmap (TH.TupE . map Just) . go [mempty]
       readResponse <- [|$(pure $ TH.AppTypeE (TH.VarE 'checkAndDecode) responseType)|]
       TH.AppE ep . TH.LamE lambdaParams . addConstantValues
         <$> [|
-          ClientM do
-            ClientEnv manager baseUrl _ <- ask
-            rawRequest <- Http.parseUrlThrow $ Text.unpack (baseUrl <> $(pure path))
-            let requestWithQuery = Http.setQueryString $(pure queries) rawRequest
-            let requestWithHeaders = requestWithQuery{Http.requestHeaders = $(pure headers), Http.method = method}
-            let requestWithBody = $(pure attachBody) requestWithHeaders
-            request <- $(pure $ TH.VarE 'liftIO) requestWithBody
-            liftIO $ Http.responseOpen request manager >>= $(pure readResponse)
+          do
+            sendRequest method $(pure path) $(pure queries) $(pure headers) $(pure attachBody) $(pure readResponse)
           |]
     R.MapArgs _ cont -> go endpoints cont
     R.HideIntrospection _ -> pure []
     R.Raw _ -> pure []
+
+sendRequest :: Http.Method -> Text -> [(Bytes.Char8.ByteString, Maybe Bytes.Char8.ByteString)] -> Http.RequestHeaders -> (Http.Request -> IO Http.Request) -> (Http.Response Http.BodyReader -> IO b) -> ClientM b
+sendRequest method path queries headers attachBody readResponse = do
+  ClientEnv manager baseUrl middleware cookiesVar <- ask
+  rawRequest <- Http.parseUrlThrow $ Text.unpack (baseUrl <> path)
+  let requestWithQuery = Http.setQueryString queries rawRequest
+  let requestWithHeaders = requestWithQuery{Http.requestHeaders = headers, Http.method = method}
+  let requestWithBody = attachBody requestWithHeaders
+  request <- $(pure $ TH.VarE 'liftIO) requestWithBody
+  let app req = liftIO do
+        now <- Time.getCurrentTime
+        req' <- Conc.atomically do
+          cookies <- Conc.readTVar cookiesVar
+          let (req', cookies') = Http.insertCookiesIntoRequest req cookies now
+          Conc.writeTVar cookiesVar cookies'
+          pure req'
+        response <- Http.responseOpen req' manager
+        now' <- Time.getCurrentTime
+        Conc.atomically do
+          cookies <- Conc.readTVar cookiesVar
+          let (cookies', response') = Http.updateCookieJar response req' now' cookies
+          Conc.writeTVar cookiesVar cookies'
+          pure response'
+  response <- middleware app request
+  liftIO $ readResponse response
 
 generateBody :: [(TH.Name, EndpointParam)] -> TH.Q TH.Exp
 generateBody =
@@ -212,7 +236,7 @@ generateQueries =
     \case
       (name, Query qn isQueryRequired _) -> Just do
         liftedQn <- TH.lift qn
-        let packRequired = if isQueryRequired then TH.AppE (TH.VarE 'Just) else id
+        let packRequired = if isQueryRequired then TH.AppE (TH.ConE 'Just) else id
         pure $ TH.TupE $ map Just [liftedQn, packRequired (TH.AppE (TH.VarE 'packQuery) (TH.VarE name))]
       _ -> Nothing
 

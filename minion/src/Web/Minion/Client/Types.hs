@@ -15,9 +15,10 @@ import Network.HTTP.Client qualified as Http
 import Network.HTTP.Media qualified as Http
 import Network.HTTP.Types qualified as Http
 import Web.HttpApiData qualified as Http
-import Web.Minion (RespBody)
+import Web.Minion (NoBody (..), RespBody)
 import Web.Minion.Auth (Auth)
 import Web.Minion.Auth.Basic (Basic, BasicAuth (..), Password (..), Username (..))
+import Web.Minion.Auth.Cookie (Cookie)
 import Web.Minion.Codec.Decode (DecodeBody (..), DecodeBodyStream (decodeBodyStream))
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Request.Body (Encode (..), ParseBodyError (..), ReqBody)
@@ -84,6 +85,11 @@ class ApplyAuth auth where
   type AuthParam auth :: Type
   applyAuth :: AuthParam auth -> Http.Request -> IO Http.Request
 
+-- | Cookies are maintained by 'ClientM'
+instance ApplyAuth (Cookie a) where
+  type AuthParam (Cookie a) = Cookie a
+  applyAuth _ = pure
+
 instance ApplyAuth Basic where
   type AuthParam Basic = BasicAuth
   applyAuth BasicAuth{username = Username username, password = Password password} req =
@@ -105,6 +111,10 @@ class (Typeable v) => ResponseClient v where
 instance (ResponseClient a) => ResponseClient (WithCookie a) where
   type ResponseForClient (WithCookie a) = ResponseForClient a
   acceptResponse = acceptResponse @a
+
+instance (Typeable a, Typeable (NoBody a)) => ResponseClient (NoBody a) where
+  type ResponseForClient (NoBody a) = NoBody a
+  acceptResponse _ = pure (Right NoBody)
 
 data StreamResponse a = StreamResponse {response :: a, close :: IO ()}
 

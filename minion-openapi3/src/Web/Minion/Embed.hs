@@ -1,4 +1,4 @@
-module Web.Minion.Embed where
+module Web.Minion.Embed (embedIndex, embedUi) where
 
 import Control.Monad.IO.Class (MonadIO (..))
 import FileEmbedLzma.Untyped

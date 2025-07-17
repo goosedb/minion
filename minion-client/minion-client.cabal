@@ -64,8 +64,10 @@ library
     , http-client
     , http-types
     , minion
+    , mtl
     , template-haskell
     , text
+    , time
     , transformers
     , wai
 

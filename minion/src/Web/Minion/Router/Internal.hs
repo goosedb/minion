@@ -179,18 +179,19 @@ data Router' (i :: [Type]) (ts :: Type) m where
 
 data RouteSettings m = RouteSettings
   { withMatchedData :: forall a. MatchedData -> m a -> m a
-  -- ^ Called before any action of in `m` is executed
-  , onHandle :: m Wai.Response -> m Wai.Response
-  -- ^ Called when all parts of the request are matched, wraps logic of 'Handle'
-  , onResponseSent :: m ()
+  -- ^ Called before any action of in `m` is executed.
+  , onHandle :: Wai.Request -> m Wai.Response -> m Wai.Response
+  -- ^ Called when all parts of the request are matched and decoded, wraps logic of 'Handle'. Note that 'Wai.Request' body is drained
+  , onResponseSent :: Wai.Request -> m ()
+  -- ^ Called when response is fully sent. Note that 'Wai.Request' body is drained
   }
 
 defaultRouteSettings :: (Monad m) => RouteSettings m
 defaultRouteSettings =
   RouteSettings
     { withMatchedData = \_ x -> x
-    , onHandle = id
-    , onResponseSent = pure ()
+    , onHandle = const id
+    , onResponseSent = const $ pure ()
     }
 
 {-# INLINE route #-}
@@ -214,17 +215,17 @@ route routeSettings ErrorBuilders{..} = go
       MapArgs f r -> go state (f args) r
       Description _ r -> go state args r
       HideIntrospection r -> go state args r
-      Handle @o method f -> routeHandle routeSettings state args method f
+      Handle method f -> routeHandle routeSettings state args method f
       Raw f -> routeRaw routeSettings state args f
-      Request @f get r -> \req resp -> do
+      Request get r -> \req resp -> do
         once <- memoize $ get bodyErrorBuilder req
         go state (WithReq once :#! args) r req resp
-      Header @a @presence @parsing headerName get r -> \req resp -> do
+      Header headerName get r -> \req resp -> do
         let header = lookupHeader req headerName
         once <- memoize $ get (headerErrorBuilder req) header
         let withHeader = WithHeader once :#! args
         go RoutingState{matchedHeaders = MatchedHeader headerName header : matchedHeaders, ..} withHeader r req resp
-      QueryParam @a @presence @parsing queryParamName parse r -> \req resp -> do
+      QueryParam queryParamName parse r -> \req resp -> do
         let mbQueryParamVal = Nel.nonEmpty $ map snd $ filter ((queryParamName ==) . fst) $ Http.queryString req
         let rawVals = map (fromMaybe "") $ Nel.toList $ fromMaybe [] mbQueryParamVal
         once <- memoize $ parse (queryParamsErrorBuilder req) mbQueryParamVal
@@ -275,8 +276,8 @@ routeRaw RouteSettings{..} RoutingState{..} args f req resp = do
   let matched = MatchedData{path = reverse matchedPath, headers = matchedHeaders, query = matchedQuery, method}
   withMatchedData matched do
     args' <- runDelayed (reverseHList (revHListToList args))
-    response <- onHandle $ f req args'
-    IO.liftIO (resp response) <* onResponseSent
+    response <- onHandle req $ f req args'
+    IO.liftIO (resp response) <* onResponseSent req
 
 {-# INLINE routeHandle #-}
 routeHandle ::
@@ -297,9 +298,9 @@ routeHandle RouteSettings{..} RoutingState{..} args method f req resp = do
       let matched = MatchedData{path = reverse matchedPath, headers = matchedHeaders, query = matchedQuery, method}
       withMatchedData matched do
         args' <- runDelayed (reverseHList (revHListToList args))
-        response <- onHandle $ f args' >>= toResponse @m @o acceptHeader
-        sendResponse response <* onResponseSent
-    else sendResponse (Wai.responseBuilder Http.status406 [] mempty) <* onResponseSent
+        response <- onHandle req $ f args' >>= toResponse @m @o acceptHeader
+        sendResponse response <* onResponseSent req
+    else sendResponse (Wai.responseBuilder Http.status406 [] mempty) <* onResponseSent req
 
 {-# INLINE goThrough #-}
 goThrough :: (IO.MonadIO m, Exc.MonadCatch m) => NoMatch -> [m b] -> m b
