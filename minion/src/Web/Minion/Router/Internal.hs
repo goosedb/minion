@@ -83,7 +83,10 @@ data MatchedData = MatchedData
   }
   deriving (Eq, Ord, Show, Generic)
 
-data CaptureResult a = CaptureServerError ServerError | CaptureNoMatch (Maybe ServerError) | Captured a
+data CaptureResult a
+  = CaptureServerError ServerError
+  | CaptureNoMatch (Maybe ServerError)
+  | Captured a
 
 data Router' (i :: [Type]) (ts :: Type) m where
   Piece ::

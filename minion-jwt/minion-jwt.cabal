@@ -63,7 +63,7 @@ library
   exposed-modules:  Web.Minion.Auth.Jwt
   build-depends:
     , aeson
-    , base          >=4.16 && <5
+    , base         >=4.16 && <5
     , bytestring
     , http-client
     , http-types
@@ -71,7 +71,6 @@ library
     , minion
     , text
     , time
-    , transformers
     , wai
 
   hs-source-dirs:   src

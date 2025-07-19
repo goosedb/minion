@@ -63,8 +63,10 @@ data JwtAuthSettings m payload a = JwtAuthSettings
 newtype JWTCookie name = JWTCookie Text
 
 instance (KnownSymbol name) => IsCookie (JWTCookie name) where
-  parseCookie = Right . JWTCookie
   cookieName = Text.pack $ symbolVal (Proxy @name)
+
+instance (KnownSymbol name) => FromCookie (JWTCookie name) where
+  decodeCookie = Right . JWTCookie
 
 instance Jose.HasClaimsSet (JwtPayload a) where
   claimsSet f JwtPayload{..} = f claims <&> \c -> JwtPayload{claims = c, ..}
