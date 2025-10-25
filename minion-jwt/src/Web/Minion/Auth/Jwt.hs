@@ -103,5 +103,5 @@ checkJwt makeError JwtAuthSettings{..} token = do
   settings <- validationSettings
   payload <- Jose.runJOSE do
     jwt <- Jose.decodeCompact $ Bytes.Lazy.fromStrict token
-    Jose.verifyJWTAt settings jwk_ now jwt
+    Jose.verifyJWTAt @_ @Jose.JWSHeader settings jwk_ now jwt
   check makeError payload
