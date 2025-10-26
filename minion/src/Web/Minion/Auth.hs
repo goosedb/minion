@@ -22,7 +22,7 @@ data AuthResult a
   = Indefinite
   | BadAuth Text
   | Authenticated a
-  deriving (Functor)
+  deriving (Functor, Eq, Ord, Show)
 
 class UnwindAuth (ctx :: [Type]) (auths :: [Type]) m a where
   unwindAuth :: [HList ctx -> ErrorBuilder -> Wai.Request -> m (AuthResult a)]
