@@ -4,7 +4,7 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Crypto.JOSE qualified as Jose
 import Crypto.JWT (JWTError)
 import Crypto.JWT qualified as Jose
-import Data.Aeson (FromJSON (..))
+import Data.Aeson (FromJSON (..), ToJSON)
 import Data.ByteString qualified as Bytes
 import Data.ByteString.Lazy qualified as Bytes.Lazy
 import Data.Data (Proxy (..))
@@ -24,6 +24,7 @@ import Web.Minion.Client.Types (
   ApplyAuth (..),
   AuthParam,
  )
+import GHC.Generics (Generic)
 
 defaultJwtAuthSettings ::
   (MonadIO m) =>
@@ -51,7 +52,7 @@ data Bearer payload
 data JwtPayload a = JwtPayload
   { claims :: Jose.ClaimsSet
   , payload :: a
-  }
+  } deriving (Generic, FromJSON, ToJSON)
 
 data JwtAuthSettings m payload a = JwtAuthSettings
   { getNow :: m Time.UTCTime
@@ -70,12 +71,6 @@ instance (KnownSymbol name) => FromCookie (JWTCookie name) where
 
 instance Jose.HasClaimsSet (JwtPayload a) where
   claimsSet f JwtPayload{..} = f claims <&> \c -> JwtPayload{claims = c, ..}
-
-instance (FromJSON a) => FromJSON (JwtPayload a) where
-  parseJSON v =
-    JwtPayload
-      <$> parseJSON v
-      <*> parseJSON v
 
 instance (MonadIO m, FromJSON payload) => IsAuth (Bearer payload) m a where
   type Settings (Bearer payload) m a = JwtAuthSettings m payload a
