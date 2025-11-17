@@ -11,7 +11,7 @@ import Web.Minion.Client.Types
 import Web.Minion.Error
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Request.Header
-import Web.Minion.Router (ValueCombinator)
+import Web.Minion.Router (ValueCombinator, Router'(Header))
 
 data HxRequest = HxRequest
 
@@ -45,7 +45,7 @@ newtype HxCurrentUrl = HxCurrentUrl {getHxCurrentUrl :: Text}
 
 -- | Matches only `HX-Request:true`. Otherwise throws 'NoMatch' that causes trying another route
 hxRequest :: (MonadThrow m, I.Introspection i I.Header HxRequest) => ValueCombinator i (Hide (WithHeader Required Strict m HxRequest)) ts m
-hxRequest next = header @Required "HX-Request" (\_ -> bool (throwM $ NoMatch Nothing) (pure HxRequest) . ("true" `elem`)) !> next
+hxRequest next = Web.Minion.Router.Header "HX-Request" (\_ -> bool (throwM $ NoMatch Nothing) (pure HxRequest) . ("true" `elem`)) !> next
 
 hxTarget ::
   forall presence m i ts.
