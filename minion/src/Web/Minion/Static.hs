@@ -4,7 +4,6 @@ import Control.Monad.IO.Class (MonadIO)
 import Data.ByteString qualified as Bytes
 import Data.ByteString.Lazy qualified as Bytes.Lazy
 import Data.Map.Strict qualified as Map
-import Data.Void
 import Network.HTTP.Media
 import System.FilePath (takeExtension)
 import Web.Minion
@@ -16,14 +15,14 @@ type StaticFileResponse = Header.AddHeaders '[Header.AddHeader "Content-Type" He
 
 {-# INLINE staticFiles #-}
 staticFiles ::
-  (Monad m, I.Introspection i I.Response StaticFileResponse, MonadIO m) =>
+  (Monad m, I.Introspection i I.Response StaticFileResponse, MonadIO m, HandleArgs ts st m) =>
   -- | see 'defaultExtsMap'
   Map.Map String MediaType ->
   [(FilePath, Bytes.ByteString)] ->
-  Router' i Void m
+  Router' i ts m
 staticFiles extsMap = foldMap \(path, content) ->
   let contentType = getContentType extsMap (takeExtension path)
-   in piece path /> handle @StaticFileResponse GET do
+   in piece path /> Handle @StaticFileResponse GET \_ -> do
         pure
           Header.AddHeaders
             { headers = Header.OverwriteHeader @"Content-Type" (Header.RawHeaderValue contentType) :# HNil

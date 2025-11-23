@@ -3,8 +3,8 @@
 
 module Web.Minion (
   -- * Minion
-  Router',
   Router,
+  Router' (..),
   MakeError,
 
   -- * Combinators
@@ -230,11 +230,21 @@ middleware = Middleware
 
 data MinionSettings m = MinionSettings
   { notFound :: m Wai.Response
+  -- ^ When 'NoMatch' is thrown and not caught
   , httpError :: ServerError -> m Wai.Response
+  -- ^ When is some 'ServerError' is thrown
   , errorBuilders :: ErrorBuilders
+  -- ^ How to render router failures
   , routeSettings :: RouteSettings m
+  -- ^ Some callbacks for observability purposes
   }
 
+{- |
+@
+main = Warp.run 9001 $ 'serve' api
+  where api = "api" /> ...
+@
+-}
 {-# INLINE serve #-}
 serve :: (IO.MonadIO m, Exc.MonadCatch m) => Router' i Void m -> ApplicationM m
 serve = serveWithSettings defaultMinionSettings

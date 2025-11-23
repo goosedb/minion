@@ -11,14 +11,14 @@ import Data.Coerce (coerce)
 import Data.Proxy (Proxy (..))
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text.Encode
-import GHC.TypeLits (KnownSymbol, symbolVal)
+import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 import Network.HTTP.Types qualified as Http
 import Network.Wai qualified as Wai
 import Web.HttpApiData (ToHttpApiData (..))
 import Web.Minion.Args.Internal
 import Web.Minion.Response (CanRespond (..), ToResponse (..))
 
-data AddHeader name a = AddHeader a | OverwriteHeader a
+data AddHeader (name :: Symbol) a = AddHeader a | OverwriteHeader a
   deriving (Functor)
 
 newtype RawHeaderValue = RawHeaderValue Bytes.ByteString

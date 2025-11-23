@@ -40,7 +40,7 @@ openapi3 ::
   Router Void m
 openapi3 r =
   [ currentPath .> handle @Redirect GET (pure . Redirect . indexHtmlPath)
-  , fromString "openapi.json" /> handleBody @Ok @'[Json] GET (pure $ generateOpenApi3 r)
+  , "openapi.json" /> handleBody @Ok @'[Json] GET (pure $ generateOpenApi3 r)
   , "static" /> [staticFiles defaultExtsMap ui', index_html /> getIndex]
   ]
  where

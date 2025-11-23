@@ -58,11 +58,31 @@ type Router = Router' '[]
 
 type MiddlewareM m = ApplicationM m -> ApplicationM m
 
+{- | Used for callbacks in 'Router''
+
+Essentially is partially applied 'ErrorBuilder'
+-}
 type MakeError = Http.Status -> Bytes.Lazy.ByteString -> ServerError
 
 type ValueCombinator i v ts m = Router' i (ts :+ v) m -> Router' i ts m
 type Combinator i ts m = Router' i ts m -> Router' i ts m
 
+{- | For router like
+
+@
+"user" \/> capture \@UserId "userId" .> captures \@String "path" .> ...
+@
+
+When \/user\/1263\/foo\/bar is called
+
+@
+"user" is 'StaticPiece' { 'matchedPiece' = "user" }
+
+"1263" is 'DynamicPiece' { 'matchedPiece' = "1263", 'placeholder' = "userId" }
+
+"foo\/bar" is 'DynamicPieces' { 'matchedPieces' = ["foo", "bar"], 'placeholder' = "path" }
+@
+-}
 data MatchedPiece
   = StaticPiece {matchedPiece :: Text}
   | DynamicPiece {matchedPiece :: Text, placeholder :: Text}

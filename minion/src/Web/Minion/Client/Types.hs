@@ -37,7 +37,7 @@ data ClientError
   | InvalidContentTypeHeader (Http.Response ())
   | ConnectionError SomeException
   | UnexpectedCode (Http.Response ResponseStream)
-  deriving (Generic, Typeable, Show)
+  deriving (Generic, Show)
 
 newtype ResponseStream = ResponseStream Http.BodyReader
 

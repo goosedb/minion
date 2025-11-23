@@ -6,6 +6,7 @@ import Data.ByteString qualified as Bytes
 import Data.ByteString.Builder qualified as Builder
 import Data.ByteString.Builder qualified as Bytes.Builder
 import Data.ByteString.Lazy qualified as Bytes.Lazy
+import Data.Kind (Type)
 import Data.List.NonEmpty qualified as Nel
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text.Encode
@@ -41,7 +42,7 @@ instance (Monad m) => EncodeStream m (OctetStream Chunks) (IO Bytes.ByteString) 
 
 This is a helper type class, all instances for it are already implemented.
 -}
-class EncodeBody cts a where
+class EncodeBody (cts :: [Type]) a where
   encodeBody :: Http.Status -> Bytes.ByteString -> a -> Wai.Response
 
 instance EncodeBody '[] a where
@@ -59,7 +60,7 @@ instance (ContentType ct, Encode ct a, EncodeBody cts a) => EncodeBody (ct ': ct
 
 This is a helper type class, all instances for it are already implemented.
 -}
-class EncodeBodyStream m cts a where
+class EncodeBodyStream m (cts :: [Type]) a where
   encodeBodyStream :: Http.Status -> Bytes.ByteString -> a -> m Wai.Response
 
 instance EncodeBodyStream m '[] a where

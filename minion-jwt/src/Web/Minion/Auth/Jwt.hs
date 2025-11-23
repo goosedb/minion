@@ -14,6 +14,7 @@ import Data.Text
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.Time qualified as Time
+import GHC.Generics (Generic)
 import GHC.TypeLits (KnownSymbol, symbolVal)
 import Network.HTTP.Client qualified as Http
 import Network.HTTP.Types.Header qualified as Http
@@ -24,7 +25,6 @@ import Web.Minion.Client.Types (
   ApplyAuth (..),
   AuthParam,
  )
-import GHC.Generics (Generic)
 
 defaultJwtAuthSettings ::
   (MonadIO m) =>
@@ -52,7 +52,8 @@ data Bearer payload
 data JwtPayload a = JwtPayload
   { claims :: Jose.ClaimsSet
   , payload :: a
-  } deriving (Generic, FromJSON, ToJSON)
+  }
+  deriving (Generic, FromJSON, ToJSON)
 
 data JwtAuthSettings m payload a = JwtAuthSettings
   { getNow :: m Time.UTCTime

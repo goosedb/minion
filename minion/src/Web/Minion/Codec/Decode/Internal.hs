@@ -6,6 +6,7 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString qualified as Bytes
 import Data.ByteString.Lazy qualified as Bytes.Lazy
 import Data.Functor
+import Data.Kind (Type)
 import Data.List.NonEmpty qualified as Nel
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -48,7 +49,7 @@ instance DecodeStream (OctetStream Chunks) (IO Bytes.ByteString) where
 
 This is a helper type class, all instances for it are already implemented.
 -}
-class DecodeBody cts a where
+class DecodeBody (cts :: [Type]) a where
   decodeBody ::
     (MonadIO m, MonadThrow m) =>
     -- | Content-Type header value
@@ -68,7 +69,7 @@ class DecodeBody cts a where
 
  This is a helper type class, all instances for it are already implemented.
 -}
-class DecodeBodyStream cts a where
+class DecodeBodyStream (cts :: [Type]) a where
   decodeBodyStream ::
     (MonadIO m, MonadThrow m) =>
     -- | Content-Type header value

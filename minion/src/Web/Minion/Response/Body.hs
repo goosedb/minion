@@ -15,6 +15,7 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.IO.Class qualified as IO
 import Data.ByteString qualified as Bytes
 import Data.ByteString.Builder qualified as Bytes.Builder
+import Data.Kind (Type)
 import Data.List.NonEmpty qualified as Nel
 import Data.Maybe (isJust)
 import Network.HTTP.Media qualified as Http
@@ -29,9 +30,9 @@ import Web.Minion.Response
 import Web.Minion.Response.Status (IsStatus (..))
 import Web.Minion.Router.Internal
 
-newtype RespBody status cts a = RespBody a
+newtype RespBody status (cts :: [Type]) a = RespBody a
 
-newtype RespBodyStream status cts a = RespBodyStream a
+newtype RespBodyStream status (cts :: [Type]) a = RespBodyStream a
 
 instance (AllContentTypes cts) => CanRespond (RespBody status cts a) where
   canRespond = genericCanRespond @cts

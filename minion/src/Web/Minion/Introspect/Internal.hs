@@ -34,7 +34,7 @@ withIntrospection a = case introspections @ii @t @x !! indexOf @i @ii of
 withElem :: forall (i :: Type) ii a. (MaybeElem ii, Typeable i) => a -> ((Elem i ii) => a) -> a
 withElem fallback action = fromMaybe fallback $ castElem @i @ii action
 
-class Introspection ii t x where
+class Introspection (ii :: [Type]) (t :: Introspected) x where
   introspections :: [ErasedIntrospectionDictionary]
 
 instance (IntrospectionFor i t x, Introspection ii t x) => Introspection (i ': ii) t x where
@@ -43,7 +43,7 @@ instance (IntrospectionFor i t x, Introspection ii t x) => Introspection (i ': i
 instance (Typeable x) => Introspection '[] t x where
   introspections = []
 
-class Elem i ii where
+class Elem i (ii :: [Type]) where
   indexOf :: Int
 
 instance Elem i (i ': ii) where

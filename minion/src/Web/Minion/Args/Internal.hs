@@ -18,7 +18,7 @@ data HList ts where
   HNil :: HList '[]
   (:#) :: t -> HList ts -> HList (t ': ts)
 
--- | Reversed HList
+-- | R(eversed) HList
 data RHList ts where
   RHNil :: RHList Void
   (:#!) :: t -> RHList ts -> RHList (ts :+ t)

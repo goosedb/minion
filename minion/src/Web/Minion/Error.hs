@@ -15,6 +15,10 @@ newtype NoMatch = NoMatch (Maybe ServerError)
   deriving stock (Show)
   deriving anyclass (Exception)
 
+{- | A way to configure how to respond if some router error is occurred
+
+The root of minion configuration is 'MinionSettings'
+-}
 type ErrorBuilder = Wai.Request -> Http.Status -> Bytes.Lazy.ByteString -> ServerError
 
 type TextToError = Bytes.Lazy.ByteString -> ServerError

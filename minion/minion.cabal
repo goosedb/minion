@@ -22,8 +22,6 @@ common common
     DeriveAnyClass
     DeriveGeneric
     DerivingStrategies
-    DerivingStrategies
-    DuplicateRecordFields
     DuplicateRecordFields
     FlexibleContexts
     FlexibleInstances
@@ -36,9 +34,7 @@ common common
     NamedFieldPuns
     OverloadedLists
     OverloadedRecordDot
-    OverloadedRecordDot
     OverloadedStrings
-    PolyKinds
     RankNTypes
     RecordWildCards
     RoleAnnotations

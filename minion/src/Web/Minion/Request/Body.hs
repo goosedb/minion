@@ -45,9 +45,11 @@ instance IsRequest (ReqBodyStream cts a) where
 -}
 reqBody ::
   forall cts r m i ts.
-  (I.Introspection i I.Request (ReqBody cts r)) =>
-  (IO.MonadIO m, MonadThrow m) =>
-  (DecodeBody cts r) =>
+  ( I.Introspection i I.Request (ReqBody cts r)
+  , IO.MonadIO m
+  , MonadThrow m
+  , DecodeBody cts r
+  ) =>
   -- | .
   ValueCombinator i (WithReq m (ReqBody cts r)) ts m
 reqBody = Request \makeError req -> do
