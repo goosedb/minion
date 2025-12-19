@@ -69,13 +69,13 @@ buildBody status mt a = respond Wai.responseBuilder $ Bytes.Builder.lazyByteStri
 -}
 {-# INLINE handleBody #-}
 handleBody ::
-  forall status cts o m ts i st.
-  (HandleArgs ts st m) =>
+  forall status cts o m ts i.
+  (HandleArgs ts m) =>
   (IsResponse m (RespBody status cts o)) =>
   (I.Introspection i I.Response (RespBody status cts o)) =>
   -- | .
   Http.Method ->
-  (DelayedArgs st ~> m o) ->
+  (DelayedArgs ts ~> m o) ->
   Router' i ts m
 handleBody method = makeHandle @(RespBody status cts) @o method RespBody
 
@@ -87,12 +87,12 @@ handleBody method = makeHandle @(RespBody status cts) @o method RespBody
 -}
 {-# INLINE handleBodyStream #-}
 handleBodyStream ::
-  forall status cts o m ts i st.
-  (HandleArgs ts st m) =>
+  forall status cts o m ts i.
+  (HandleArgs ts m) =>
   (IsResponse m (RespBodyStream status cts o)) =>
   (I.Introspection i I.Response (RespBodyStream status cts o)) =>
   -- | .
   Http.Method ->
-  (DelayedArgs st ~> m o) ->
+  (DelayedArgs ts ~> m o) ->
   Router' i ts m
 handleBodyStream method = makeHandle @(RespBodyStream status cts) @o method RespBodyStream

@@ -17,6 +17,7 @@ import Network.Wai qualified as Wai
 import Web.HttpApiData (ToHttpApiData (..))
 import Web.Minion.Args.Internal
 import Web.Minion.Response (CanRespond (..), ToResponse (..))
+import Data.Void (Void)
 
 data AddHeader (name :: Symbol) a = AddHeader a | OverwriteHeader a
   deriving (Functor)

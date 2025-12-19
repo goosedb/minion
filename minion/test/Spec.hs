@@ -6,17 +6,22 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Main where
 
@@ -46,20 +51,21 @@ import Data.Void (Void)
 import GHC.Generics (Generic)
 import GHC.IO (unsafePerformIO)
 import Network.HTTP.Media qualified as Http
+import Network.HTTP.Types (Method)
 import Network.HTTP.Types qualified as Http
 import Network.Wai (responseStatus)
 import Network.Wai qualified as Wai
 import Network.Wai.Internal qualified as Wai.Internal
-import Test.Hspec (
-  Expectation,
-  HasCallStack,
-  Spec,
-  SpecWith,
-  describe,
-  hspec,
-  it,
-  shouldSatisfy,
- )
+import Test.Hspec
+  ( Expectation,
+    HasCallStack,
+    Spec,
+    SpecWith,
+    describe,
+    hspec,
+    it,
+    shouldSatisfy,
+  )
 import Text.Read (readEither, readMaybe)
 import Web.FormUrlEncoded
 import Web.Minion
@@ -68,8 +74,10 @@ import Web.Minion.Media (ContentType (..))
 import Web.Minion.Media.FormUrlEncoded
 import Web.Minion.Media.Json (Json)
 import Web.Minion.Media.PlainText (PlainText)
-import Web.Minion.Request.Body (Decode (..))
+import Web.Minion.Request.Body (Decode (..), Rest, handleEnv)
 import Web.Minion.Response.Status (Ok)
+import Web.Minion.Response.Body (IsResponse)
+import Data.Data (Typeable)
 
 {-# INLINE compile #-}
 compile :: Minion.Router Void IO -> IO (Wai.Request -> IO Wai.Response)
@@ -85,10 +93,10 @@ compileMD :: Minion.Router Void (ReaderT Minion.MatchedData IO) -> IO (Wai.Reque
 compileMD r = do
   response <- Conc.newEmptyMVar
   let compiled get = do
-        Minion.serveWithSettings Minion.defaultMinionSettings{Minion.withMatchedData = \d -> local (const d)} r get \resp -> do
+        Minion.serveWithSettings Minion.defaultMinionSettings {Minion.routeSettings = Minion.defaultRouteSettings {Minion.withMatchedData = \d -> local (const d)}} r get \resp -> do
           Conc.putMVar response resp
           pure Wai.Internal.ResponseReceived
-  pure \req -> runReaderT (compiled req) (Minion.MatchedData{path = [], headers = [], query = [], method = GET}) >>= const (Conc.readMVar response)
+  pure \req -> runReaderT (compiled req) (Minion.MatchedData {path = [], headers = [], query = [], method = GET}) >>= const (Conc.readMVar response)
 
 root :: Minion.Router Void m -> Minion.Router Void m
 root = id
@@ -145,41 +153,41 @@ responseShouldFailWithBody resp validate = resp >>= (toShowResponse @Text >=> (`
 withQueryParams :: [(Text, Text)] -> Wai.Request -> Wai.Request
 withQueryParams qps get =
   let newQueryString = Wai.queryString get <> map (bimap Text.encodeUtf8 (Just . Text.encodeUtf8)) qps
-   in get{Wai.queryString = newQueryString}
+   in get {Wai.queryString = newQueryString}
 
 withPath :: [Text] -> Wai.Request -> Wai.Request
-withPath path get = get{Wai.pathInfo = path}
+withPath path get = get {Wai.pathInfo = path}
 
 withHeader :: Http.Header -> Wai.Internal.Request -> Wai.Internal.Request
-withHeader header get = get{Wai.requestHeaders = header : Wai.requestHeaders get}
+withHeader header get = get {Wai.requestHeaders = header : Wai.requestHeaders get}
 
 withJsonBody :: (J.ToJSON a) => a -> Wai.Request -> IO Wai.Request
 withJsonBody v req = feed >>= \f -> pure $ Wai.setRequestBodyChunks f req
- where
-  feed = do
-    alreadyFed <- IORef.newIORef False
-    pure do
-      IORef.readIORef alreadyFed >>= bool (IORef.writeIORef alreadyFed True $> Bytes.Lazy.toStrict (J.encode v)) (pure mempty)
+  where
+    feed = do
+      alreadyFed <- IORef.newIORef False
+      pure do
+        IORef.readIORef alreadyFed >>= bool (IORef.writeIORef alreadyFed True $> Bytes.Lazy.toStrict (J.encode v)) (pure mempty)
 
 withTextBody :: Text -> Wai.Request -> IO Wai.Request
 withTextBody v req = feed >>= \f -> pure $ Wai.setRequestBodyChunks f req
- where
-  feed = do
-    alreadyFed <- IORef.newIORef False
-    pure do
-      IORef.readIORef alreadyFed >>= bool (IORef.writeIORef alreadyFed True $> Text.encodeUtf8 v) (pure mempty)
+  where
+    feed = do
+      alreadyFed <- IORef.newIORef False
+      pure do
+        IORef.readIORef alreadyFed >>= bool (IORef.writeIORef alreadyFed True $> Text.encodeUtf8 v) (pure mempty)
 
 get :: Wai.Request
 get = Wai.defaultRequest
 
 post :: Wai.Request
-post = Wai.defaultRequest{Wai.requestMethod = POST}
+post = Wai.defaultRequest {Wai.requestMethod = POST}
 
 put :: Wai.Request
-put = Wai.defaultRequest{Wai.requestMethod = PUT}
+put = Wai.defaultRequest {Wai.requestMethod = PUT}
 
 withContentType :: forall ct. (ContentType ct) => Wai.Request -> Wai.Request
-withContentType req = req{Wai.requestHeaders = Wai.requestHeaders req <> [("Content-Type", Http.renderHeader $ Nel.head $ media @ct)]}
+withContentType req = req {Wai.requestHeaders = Wai.requestHeaders req <> [("Content-Type", Http.renderHeader $ Nel.head $ media @ct)]}
 
 main :: IO ()
 main = hspec do
@@ -210,6 +218,7 @@ list :: forall a. [a] -> [a]
 list = id
 
 data Foo = Foo {foo :: Int, bar :: Bool} deriving (Generic, J.ToJSON, J.FromJSON)
+
 data Baz = Baz {baz :: [Int], qux :: String} deriving (Generic, J.ToJSON, J.FromJSON)
 
 instance Decode PlainText Foo where
@@ -224,6 +233,23 @@ instance Decode PlainText Foo where
       . Text.decodeUtf8
       . Bytes.Lazy.toStrict
 
+class ActionInMonad f m a where
+  liftAction :: f -> m a
+
+instance ActionInMonad x m a => ActionInMonad (x -> f) m a where
+  liftAction f = undefined
+
+instance ActionInMonad (m a) m a where
+  liftAction = id
+
+withFoo ::
+  forall r ts m n.
+  (IsResponse m (RespBody Ok '[Json] r), FunArgs (Rest (Void :+ Foo) (DelayedArgs ts)), HandleArgs ts m, MonadIO m, Typeable r, Bite (Void :+ Foo) (DelayedArgs ts)) =>
+  Method ->
+  Rest (Void :+ Foo) (DelayedArgs ts) ~> ReaderT Foo m (RespBody Ok '[Json] r) ->
+  Router ts m
+withFoo = handleEnv @(Void :+ Foo) @ts @(RespBody Ok '[Json] r) \case (foo :#! ANil) -> flip runReaderT foo
+
 bodySpec :: Spec
 bodySpec = do
   test "parse body depending on method" do
@@ -232,17 +258,17 @@ bodySpec = do
             /> "api"
             /> "foo"
             /> "bar"
-            /> [ reqBody @'[Json] @Foo .> handleBody @Ok @'[Json] @J.Value GET \Foo{..} -> pure $ J.object ["foo" .= J.object ["foo" .= foo, "bar" .= bar]]
-               , reqBody @'[Json] @Baz .> handleBody @Ok @'[Json] @J.Value POST \Baz{..} -> pure $ J.object ["baz" .= J.object ["baz" .= baz, "qux" .= qux]]
+            /> [ reqBody @'[Json] @Foo .> capture @Int "int" .> capture @String "int" .> withFoo @J.Value GET \i1 i2 -> pure $ RespBody $ J.object ["foo" .= J.object ["foo" .= _, "bar" .= _]],
+                 reqBody @'[Json] @Baz .> handleBody @Ok @'[Json] @J.Value POST \Baz {..} -> pure $ J.object ["baz" .= J.object ["baz" .= baz, "qux" .= qux]]
                ]
 
-    (get & withPath ["api", "foo", "bar"] & withJsonBody Foo{foo = 1, bar = False})
+    (get & withPath ["api", "foo", "bar"] & withJsonBody Foo {foo = 1, bar = False})
       `sendToIO` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == J.object ["foo" .= J.object ["foo" .= int 1, "bar" .= False]]
+      `responseShouldSatisfy` \ShowResponse {..} -> body == J.object ["foo" .= J.object ["foo" .= int 1, "bar" .= False]]
 
-    (post & withPath ["api", "foo", "bar"] & withJsonBody Baz{baz = [1, 2], qux = "hello"})
+    (post & withPath ["api", "foo", "bar"] & withJsonBody Baz {baz = [1, 2], qux = "hello"})
       `sendToIO` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == J.object ["baz" .= J.object ["baz" .= list [int 1, 2], "qux" .= txt "hello"]]
+      `responseShouldSatisfy` \ShowResponse {..} -> body == J.object ["baz" .= J.object ["baz" .= list [int 1, 2], "qux" .= txt "hello"]]
 
   test "parse body depending on content-type" do
     let server =
@@ -251,72 +277,72 @@ bodySpec = do
             /> "foo"
             /> "bar"
             /> reqBody @'[Json, PlainText] @Foo
-            .> handleBody @Ok @'[Json] POST \Foo{..} -> pure $ J.object ["foo" .= J.object ["foo" .= foo, "bar" .= bar]]
+            .> handleBody @Ok @'[Json] POST \Foo {..} -> pure $ J.object ["foo" .= J.object ["foo" .= foo, "bar" .= bar]]
 
-    (post & withPath ["api", "foo", "bar"] & withContentType @Json & withJsonBody Foo{foo = 1, bar = False})
+    (post & withPath ["api", "foo", "bar"] & withContentType @Json & withJsonBody Foo {foo = 1, bar = False})
       `sendToIO` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == J.object ["foo" .= J.object ["foo" .= int 1, "bar" .= False]]
+      `responseShouldSatisfy` \ShowResponse {..} -> body == J.object ["foo" .= J.object ["foo" .= int 1, "bar" .= False]]
 
     (post & withPath ["api", "foo", "bar"] & withContentType @PlainText & withTextBody "10 True")
       `sendToIO` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == J.object ["foo" .= J.object ["foo" .= int 10, "bar" .= True]]
+      `responseShouldSatisfy` \ShowResponse {..} -> body == J.object ["foo" .= J.object ["foo" .= int 10, "bar" .= True]]
 
     (post & withPath ["api", "foo", "bar"] & withContentType @FormUrlEncoded & withTextBody "dont care")
       `sendToIO` server
-      `responseShouldFailWith` \ShowResponse{..} -> status == Http.status415
+      `responseShouldFailWith` \ShowResponse {..} -> status == Http.status415
 
   test "parse first content-type if not specified" do
     let api cont = root /> "api" /> "foo" /> "bar" /> cont
-    let handle Foo{..} = pure $ J.object ["foo" .= J.object ["foo" .= foo, "bar" .= bar]]
+    let handle Foo {..} = pure $ J.object ["foo" .= J.object ["foo" .= foo, "bar" .= bar]]
     let serverJson = api /> reqBody @'[Json, PlainText] @Foo .> handleBody @Ok @'[Json] POST handle
     let serverText = api /> reqBody @'[PlainText, Json] @Foo .> handleBody @Ok @'[Json] POST handle
 
-    (post & withPath ["api", "foo", "bar"] & withJsonBody Foo{foo = 1, bar = False})
+    (post & withPath ["api", "foo", "bar"] & withJsonBody Foo {foo = 1, bar = False})
       `sendToIO` serverJson
-      `responseShouldSatisfy` \ShowResponse{..} -> body == J.object ["foo" .= J.object ["foo" .= int 1, "bar" .= False]]
+      `responseShouldSatisfy` \ShowResponse {..} -> body == J.object ["foo" .= J.object ["foo" .= int 1, "bar" .= False]]
 
     (post & withPath ["api", "foo", "bar"] & withTextBody "10 True")
       `sendToIO` serverText
-      `responseShouldSatisfy` \ShowResponse{..} -> body == J.object ["foo" .= J.object ["foo" .= int 10, "bar" .= True]]
+      `responseShouldSatisfy` \ShowResponse {..} -> body == J.object ["foo" .= J.object ["foo" .= int 10, "bar" .= True]]
 
 methodSpec :: Spec
 methodSpec = do
   let server =
         root
           /> "api"
-          /> [ "foo" /> "bar" /> handleBody @Ok @'[PlainText] GET (pure $ txt "/foo/bar get")
-             , "foo" /> "bar" /> handleBody @Ok @'[PlainText] POST (pure $ txt "/foo/bar post")
-             , "baz"
+          /> [ "foo" /> "bar" /> handleBody @Ok @'[PlainText] GET (pure $ txt "/foo/bar get"),
+               "foo" /> "bar" /> handleBody @Ok @'[PlainText] POST (pure $ txt "/foo/bar post"),
+               "baz"
                  /> "qux"
-                 /> [ handleBody @Ok @'[PlainText] GET (pure $ txt "/baz/qux get")
-                    , handleBody @Ok @'[PlainText] POST (pure $ txt "/baz/qux post")
+                 /> [ handleBody @Ok @'[PlainText] GET (pure $ txt "/baz/qux get"),
+                      handleBody @Ok @'[PlainText] POST (pure $ txt "/baz/qux post")
                     ]
              ]
   test "find route with specified method" do
     withPath ["api", "foo", "bar"] get
       `sendTo` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == txt "/foo/bar get"
+      `responseShouldSatisfy` \ShowResponse {..} -> body == txt "/foo/bar get"
 
     withPath ["api", "foo", "bar"] post
       `sendTo` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == txt "/foo/bar post"
+      `responseShouldSatisfy` \ShowResponse {..} -> body == txt "/foo/bar post"
 
     withPath ["api", "baz", "qux"] get
       `sendTo` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == txt "/baz/qux get"
+      `responseShouldSatisfy` \ShowResponse {..} -> body == txt "/baz/qux get"
 
     withPath ["api", "baz", "qux"] post
       `sendTo` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == txt "/baz/qux post"
+      `responseShouldSatisfy` \ShowResponse {..} -> body == txt "/baz/qux post"
 
   test "fail to find route with specified method" do
     withPath ["api", "foo", "bar"] put
       `sendTo` server
-      `responseShouldFailWith` \ShowResponse{..} -> status == Http.status404
+      `responseShouldFailWith` \ShowResponse {..} -> status == Http.status404
 
     withPath ["api", "baz", "qux"] put
       `sendTo` server
-      `responseShouldFailWith` \ShowResponse{..} -> status == Http.status404
+      `responseShouldFailWith` \ShowResponse {..} -> status == Http.status404
 
 captureSpec :: Spec
 captureSpec = do
@@ -324,57 +350,57 @@ captureSpec = do
     let server =
           root
             /> "api"
-            /> [ capture @String "name" .> handleBody @Ok @'[PlainText] GET (\_ -> pure $ txt "dynamic")
-               , "John" /> handleBody @Ok @'[PlainText] GET (pure $ txt "static")
+            /> [ capture @String "name" .> handleBody @Ok @'[PlainText] GET (\_ -> pure $ txt "dynamic"),
+                 "John" /> handleBody @Ok @'[PlainText] GET (pure $ txt "static")
                ]
     withPath ["api", "Mary"] get
       `sendTo` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == txt "dynamic"
+      `responseShouldSatisfy` \ShowResponse {..} -> body == txt "dynamic"
 
     withPath ["api", "John"] get
       `sendTo` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == txt "static"
+      `responseShouldSatisfy` \ShowResponse {..} -> body == txt "static"
 
   test "fallback to next if parsing fail" do
     let server =
           root
             /> "api"
-            /> [ capture @Int "id" .> "foo" /> handleBody @Ok @'[Json] GET (\_id -> pure $ J.object ["id" .= _id])
-               , capture @Bool "enabled" .> handleBody @Ok @'[Json] GET (\enabled -> pure $ J.object ["enabled" .= enabled])
-               , capture @String "name" .> handleBody @Ok @'[Json] GET (\name -> pure $ J.object ["name" .= name])
+            /> [ capture @Int "id" .> "foo" /> handleBody @Ok @'[Json] GET (\_id -> pure $ J.object ["id" .= _id]),
+                 capture @Bool "enabled" .> handleBody @Ok @'[Json] GET (\enabled -> pure $ J.object ["enabled" .= enabled]),
+                 capture @String "name" .> handleBody @Ok @'[Json] GET (\name -> pure $ J.object ["name" .= name])
                ]
 
     withPath ["api", "6", "foo"] get
       `sendTo` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == J.object ["id" .= int 6]
+      `responseShouldSatisfy` \ShowResponse {..} -> body == J.object ["id" .= int 6]
 
     withPath ["api", "true"] get
       `sendTo` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == J.object ["enabled" .= True]
+      `responseShouldSatisfy` \ShowResponse {..} -> body == J.object ["enabled" .= True]
 
     withPath ["api", "John"] get
       `sendTo` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == J.object ["name" .= txt "John"]
+      `responseShouldSatisfy` \ShowResponse {..} -> body == J.object ["name" .= txt "John"]
 
   test "throw last parsing error" do
     let server =
           root
             /> "api"
-            /> [ capture @Int "id" .> "foo" /> handleBody @Ok @'[Json] GET (\_id -> pure $ J.object ["id" .= _id])
-               , capture @Bool "enabled" .> handleBody @Ok @'[Json] GET (\enabled -> pure $ J.object ["enabled" .= enabled])
+            /> [ capture @Int "id" .> "foo" /> handleBody @Ok @'[Json] GET (\_id -> pure $ J.object ["id" .= _id]),
+                 capture @Bool "enabled" .> handleBody @Ok @'[Json] GET (\enabled -> pure $ J.object ["enabled" .= enabled])
                ]
 
     withPath ["api", "6", "foo"] get
       `sendTo` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == J.object ["id" .= int 6]
+      `responseShouldSatisfy` \ShowResponse {..} -> body == J.object ["id" .= int 6]
 
     withPath ["api", "true"] get
       `sendTo` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == J.object ["enabled" .= True]
+      `responseShouldSatisfy` \ShowResponse {..} -> body == J.object ["enabled" .= True]
 
     withPath ["api", "John"] get
       `sendTo` server
-      `responseShouldFailWithBody` \ShowResponse{..} -> and @[] [status == Http.status400, body == "could not parse: `john'"]
+      `responseShouldFailWithBody` \ShowResponse {..} -> and @[] [status == Http.status400, body == "could not parse: `john'"]
 
 capturesSpec :: Spec
 capturesSpec = do
@@ -382,42 +408,42 @@ capturesSpec = do
     let server =
           root
             /> "api"
-            /> [ captures @Int "id" .> handleBody @Ok @'[Json] GET (\ids -> pure $ J.object ["ids" .= ids])
-               , captures @Bool "flags" .> handleBody @Ok @'[Json] GET (\flags -> pure $ J.object ["flags" .= flags])
-               , captures @String "items" .> handleBody @Ok @'[Json] GET (\items -> pure $ J.object ["items" .= items])
+            /> [ captures @Int "id" .> handleBody @Ok @'[Json] GET (\ids -> pure $ J.object ["ids" .= ids]),
+                 captures @Bool "flags" .> handleBody @Ok @'[Json] GET (\flags -> pure $ J.object ["flags" .= flags]),
+                 captures @String "items" .> handleBody @Ok @'[Json] GET (\items -> pure $ J.object ["items" .= items])
                ]
 
     withPath ["api", "6", "10", "500"] get
       `sendTo` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == J.object ["ids" .= list [int 6, 10, 500]]
+      `responseShouldSatisfy` \ShowResponse {..} -> body == J.object ["ids" .= list [int 6, 10, 500]]
 
     withPath ["api", "true", "false", "true"] get
       `sendTo` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == J.object ["flags" .= list [True, False, True]]
+      `responseShouldSatisfy` \ShowResponse {..} -> body == J.object ["flags" .= list [True, False, True]]
 
     withPath ["api", "foo", "bar", "baz"] get
       `sendTo` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == J.object ["items" .= list [txt "foo", "bar", "baz"]]
+      `responseShouldSatisfy` \ShowResponse {..} -> body == J.object ["items" .= list [txt "foo", "bar", "baz"]]
 
   test "throw last parsing error" do
     let server =
           root
             /> "api"
-            /> [ captures @Int "id" .> handleBody @Ok @'[Json] GET (\ids -> pure $ J.object ["ids" .= ids])
-               , captures @Bool "flags" .> handleBody @Ok @'[Json] GET (\flags -> pure $ J.object ["flags" .= flags])
+            /> [ captures @Int "id" .> handleBody @Ok @'[Json] GET (\ids -> pure $ J.object ["ids" .= ids]),
+                 captures @Bool "flags" .> handleBody @Ok @'[Json] GET (\flags -> pure $ J.object ["flags" .= flags])
                ]
 
     withPath ["api", "6", "10", "500"] get
       `sendTo` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == J.object ["ids" .= list [int 6, 10, 500]]
+      `responseShouldSatisfy` \ShowResponse {..} -> body == J.object ["ids" .= list [int 6, 10, 500]]
 
     withPath ["api", "true", "false", "true"] get
       `sendTo` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == J.object ["flags" .= list [True, False, True]]
+      `responseShouldSatisfy` \ShowResponse {..} -> body == J.object ["flags" .= list [True, False, True]]
 
     withPath ["api", "foo", "bar", "baz"] get
       `sendTo` server
-      `responseShouldFailWithBody` \ShowResponse{..} -> and @[] [status == Http.status400, body == "could not parse: `foo'"]
+      `responseShouldFailWithBody` \ShowResponse {..} -> and @[] [status == Http.status400, body == "could not parse: `foo'"]
 
 pathSpec :: Spec
 pathSpec = do
@@ -427,51 +453,51 @@ pathSpec = do
           [ "api"
               /> [ "aaa"
                      /> "bbb"
-                     /> [ "ccc" /> "ddd" /> pt 1
-                        , "eee" /> pt 2
-                        ]
-                 , "fff" /> "ggg" /> pt 3
-                 ]
-          , "internal" /> "zzz" /> pt 4
+                     /> [ "ccc" /> "ddd" /> pt 1,
+                          "eee" /> pt 2
+                        ],
+                   "fff" /> "ggg" /> pt 3
+                 ],
+            "internal" /> "zzz" /> pt 4
           ]
 
   test "find route by path" do
     withPath ["api", "aaa", "bbb", "ccc", "ddd"] get
       `sendTo` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == txt "1"
+      `responseShouldSatisfy` \ShowResponse {..} -> body == txt "1"
 
     withPath ["api", "aaa", "bbb", "eee"] get
       `sendTo` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == txt "2"
+      `responseShouldSatisfy` \ShowResponse {..} -> body == txt "2"
 
     withPath ["api", "fff", "ggg"] get
       `sendTo` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == txt "3"
+      `responseShouldSatisfy` \ShowResponse {..} -> body == txt "3"
 
     withPath ["internal", "zzz"] get
       `sendTo` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == txt "4"
+      `responseShouldSatisfy` \ShowResponse {..} -> body == txt "4"
 
   test "fail to find route by path" do
     withPath ["api", "aaa", "bbb", "ccc", "ddd", "eee"] get
       `sendTo` server
-      `responseShouldFailWith` \ShowResponse{..} -> status == Http.status404
+      `responseShouldFailWith` \ShowResponse {..} -> status == Http.status404
 
     withPath ["api", "aaa", "bbb", "ccc"] get
       `sendTo` server
-      `responseShouldFailWith` \ShowResponse{..} -> status == Http.status404
+      `responseShouldFailWith` \ShowResponse {..} -> status == Http.status404
 
     withPath ["api", "aaa", "bbb"] get
       `sendTo` server
-      `responseShouldFailWith` \ShowResponse{..} -> status == Http.status404
+      `responseShouldFailWith` \ShowResponse {..} -> status == Http.status404
 
     withPath ["api", "fff"] get
       `sendTo` server
-      `responseShouldFailWith` \ShowResponse{..} -> status == Http.status404
+      `responseShouldFailWith` \ShowResponse {..} -> status == Http.status404
 
     withPath [] get
       `sendTo` server
-      `responseShouldFailWith` \ShowResponse{..} -> status == Http.status404
+      `responseShouldFailWith` \ShowResponse {..} -> status == Http.status404
 
 queryParamSpec :: Spec
 queryParamSpec = do
@@ -485,13 +511,13 @@ queryParamSpec = do
       let request = baseRequest & withQueryParams ["foo" .-> "hi", "bar" .-> "bye"]
       request
         `sendTo` server
-        `responseShouldSatisfy` \ShowResponse{..} -> body == J.object ["foo" .= txt "hi", "bar" .= txt "bye"]
+        `responseShouldSatisfy` \ShowResponse {..} -> body == J.object ["foo" .= txt "hi", "bar" .= txt "bye"]
 
     test "fail to collect query" do
       let request = baseRequest & withQueryParams ["foo" .-> "hi"]
       request
         `sendTo` server
-        `responseShouldFailWith` \ShowResponse{..} -> Http.status400 == status
+        `responseShouldFailWith` \ShowResponse {..} -> Http.status400 == status
 
   describe "optional" do
     test "collect query" do
@@ -502,7 +528,7 @@ queryParamSpec = do
       let request = get & withPath ["api", "query"] & withQueryParams ["qux" .-> "hi"]
       request
         `sendTo` server
-        `responseShouldSatisfy` \ShowResponse{..} -> body == J.object ["qux" .= txt "hi", "baz" .= J.Null]
+        `responseShouldSatisfy` \ShowResponse {..} -> body == J.object ["qux" .= txt "hi", "baz" .= J.Null]
 
   describe "mixed" do
     let server = root do
@@ -514,13 +540,13 @@ queryParamSpec = do
       let request = baseRequest & withQueryParams ["baz" .-> "hi"]
       request
         `sendTo` server
-        `responseShouldSatisfy` \ShowResponse{..} -> body == J.object ["baz" .= txt "hi", "qux" .= J.Null]
+        `responseShouldSatisfy` \ShowResponse {..} -> body == J.object ["baz" .= txt "hi", "qux" .= J.Null]
 
     test "fail to collect query" do
       let request = baseRequest & withQueryParams []
       request
         `sendTo` server
-        `responseShouldFailWith` \ShowResponse{..} -> status == Http.status400
+        `responseShouldFailWith` \ShowResponse {..} -> status == Http.status400
 
 queryParamsSpec :: Spec
 queryParamsSpec = do
@@ -534,13 +560,13 @@ queryParamsSpec = do
       let request = baseRequest & withQueryParams ["foo" .-> "1", "foo" .-> "2", "foo" .-> "3"]
       request
         `sendTo` server
-        `responseShouldSatisfy` \ShowResponse{..} -> body == J.object ["foo" .= list [int 1, 2, 3]]
+        `responseShouldSatisfy` \ShowResponse {..} -> body == J.object ["foo" .= list [int 1, 2, 3]]
 
     test "negative" do
       let request = baseRequest
       request
         `sendTo` server
-        `responseShouldFailWith` \ShowResponse{..} -> status == Http.status400
+        `responseShouldFailWith` \ShowResponse {..} -> status == Http.status400
 
   test "optional" do
     let server = root do
@@ -550,7 +576,7 @@ queryParamsSpec = do
 
     request
       `sendTo` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == J.object ["foo" .= list [int 1, 2, 3], "bar" .= J.Null]
+      `responseShouldSatisfy` \ShowResponse {..} -> body == J.object ["foo" .= list [int 1, 2, 3], "bar" .= J.Null]
 
 queryFlagSpec :: Spec
 queryFlagSpec = do
@@ -567,11 +593,11 @@ queryFlagSpec = do
         method foo bar baz qux yoi =
           pure $
             J.object
-              [ "foo" .= foo
-              , "bar" .= bar
-              , "baz" .= baz
-              , "qux" .= qux
-              , "yoi" .= yoi
+              [ "foo" .= foo,
+                "bar" .= bar,
+                "baz" .= baz,
+                "qux" .= qux,
+                "yoi" .= yoi
               ]
         baseRequest = get & withPath ["api", "query"]
 
@@ -579,13 +605,13 @@ queryFlagSpec = do
       let request = baseRequest & withQueryParams ["foo" .-> "1", "bar" .-> "", "baz" .-> "true", "qux" .-> "false", "yoi" .-> "something_else"]
       request
         `sendTo` server
-        `responseShouldSatisfy` \ShowResponse{..} -> body == J.object ["foo" .= True, "bar" .= True, "baz" .= True, "qux" .= False, "yoi" .= False]
+        `responseShouldSatisfy` \ShowResponse {..} -> body == J.object ["foo" .= True, "bar" .= True, "baz" .= True, "qux" .= False, "yoi" .= False]
 
     test "negative" do
       let request = baseRequest & withQueryParams ["foo" .-> "1", "bar" .-> "", "baz" .-> "true", "qux" .-> "false"]
       request
         `sendTo` server
-        `responseShouldFailWith` \ShowResponse{..} -> status == Http.status400
+        `responseShouldFailWith` \ShowResponse {..} -> status == Http.status400
   test "optional" do
     let server = root do
           "api"
@@ -597,15 +623,15 @@ queryFlagSpec = do
         method foo bar baz =
           pure $
             J.object
-              [ "foo" .= foo
-              , "bar" .= bar
-              , "baz" .= baz
+              [ "foo" .= foo,
+                "bar" .= bar,
+                "baz" .= baz
               ]
         request = get & withPath ["api", "query"] & withQueryParams ["foo" .-> "false", "baz" .-> ""]
 
     request
       `sendTo` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == J.object ["foo" .= False, "bar" .= J.Null, "baz" .= True]
+      `responseShouldSatisfy` \ShowResponse {..} -> body == J.object ["foo" .= False, "bar" .= J.Null, "baz" .= True]
 
 data SomeQueryForm = SomeQueryForm {foo :: Int, bar :: [String], baz :: Maybe String}
   deriving (Generic, Show)
@@ -622,7 +648,7 @@ queryFormSpec = do
     let request = baseRequest & withQueryParams ["foo" .-> "5", "bar" .-> "aaa", "bar" .-> "bbb", "baz" .-> "zzz"]
     request
       `sendTo` server
-      `responseShouldSatisfy` \ShowResponse{..} -> body == J.toJSON SomeQueryForm{foo = 5, bar = ["aaa", "bbb"], baz = Just "zzz"}
+      `responseShouldSatisfy` \ShowResponse {..} -> body == J.toJSON SomeQueryForm {foo = 5, bar = ["aaa", "bbb"], baz = Just "zzz"}
 
   test "negative" do
     let server = root do
@@ -633,4 +659,4 @@ queryFormSpec = do
     let request = baseRequest & withQueryParams ["bar" .-> "aaa", "bar" .-> "bbb", "baz" .-> "zzz"]
     request
       `sendTo` server
-      `responseShouldFailWith` \ShowResponse{..} -> status == Http.status400
+      `responseShouldFailWith` \ShowResponse {..} -> status == Http.status400

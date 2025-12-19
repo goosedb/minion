@@ -10,12 +10,13 @@ import Web.Minion
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Media.OctetStream (Bytes, OctetStream)
 import Web.Minion.Response.Header qualified as Header
+import Web.Minion.Args.Internal
 
 type StaticFileResponse = Header.AddHeaders '[Header.AddHeader "Content-Type" Header.RawHeaderValue] (RespBody Ok '[OctetStream Bytes] Bytes.Lazy.ByteString)
 
 {-# INLINE staticFiles #-}
 staticFiles ::
-  (Monad m, I.Introspection i I.Response StaticFileResponse, MonadIO m, HandleArgs ts st m) =>
+  (Monad m, I.Introspection i I.Response StaticFileResponse, MonadIO m, HandleArgs ts m) =>
   -- | see 'defaultExtsMap'
   Map.Map String MediaType ->
   [(FilePath, Bytes.ByteString)] ->

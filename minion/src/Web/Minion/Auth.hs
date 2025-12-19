@@ -6,7 +6,7 @@ import Data.Kind (Type)
 import Data.Text (Text)
 import Data.Void (Void, absurd)
 import Network.Wai qualified as Wai
-import Web.Minion.Args (GetByType (getByType), HList, WithReq)
+import Web.Minion.Args (GetByType (getByType), WithReq, Args)
 import Web.Minion.Error
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Request
@@ -24,8 +24,8 @@ data AuthResult a
   | Authenticated a
   deriving (Functor, Eq, Ord, Show)
 
-class UnwindAuth (ctx :: [Type]) (auths :: [Type]) m a where
-  unwindAuth :: [HList ctx -> ErrorBuilder -> Wai.Request -> m (AuthResult a)]
+class UnwindAuth (ctx :: Type) (auths :: [Type]) m a where
+  unwindAuth :: [Args ctx -> ErrorBuilder -> Wai.Request -> m (AuthResult a)]
 
 class IsAuth (auth :: Type) m a where
   type Settings auth m a :: Type
@@ -56,7 +56,7 @@ auth ::
   (UnwindAuth ctx auths m a) =>
   (MonadThrow m) =>
   -- | Context with auths settings
-  m (HList ctx) ->
+  m (Args ctx) ->
   -- |  Handle non-Authenticated.
   (MakeError -> AuthResult Void -> m Void) ->
   ValueCombinator i (WithReq m (Auth auths a)) ts m

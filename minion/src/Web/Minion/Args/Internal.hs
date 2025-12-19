@@ -18,10 +18,27 @@ data HList ts where
   HNil :: HList '[]
   (:#) :: t -> HList ts -> HList (t ': ts)
 
+
+class Bite piece args where
+  bite :: Args args -> (Args piece, Args (Rest piece args))
+
+type family Rest piece args :: Type where
+  Rest ts ts = Void
+  Rest ts (ts' :+ t) = Rest ts ts' :+ t
+
+instance {-# OVERLAPPING #-} Bite (ts :+ t) (ts :+ t) where
+  bite a = (a, ANil)
+
+instance (Bite (ts :+ x) ts', Rest (ts :+ x) (ts' :+ t) ~ Rest (ts :+ x) ts' :+ t) => Bite (ts :+ x) (ts' :+ t) where
+
+  bite (a :#! as) = 
+    let (x, y) = bite @(ts :+ x) @ts' as
+    in (x, a :#! y)
+
 -- | R(eversed) HList
-data RHList ts where
-  RHNil :: RHList Void
-  (:#!) :: t -> RHList ts -> RHList (ts :+ t)
+data Args ts where
+  ANil :: Args Void
+  (:#!) :: t -> Args ts -> Args (ts :+ t)
 
 type family MapElem ts t t' where
   MapElem (ts :+ t) t t' = ts :+ t'
@@ -31,59 +48,59 @@ type family MapElem ts t t' where
 infixr 1 :#
 infixr 1 :#!
 
-deriving instance Show (RHList Void)
-deriving instance (Show (RHList as), Show a) => Show (RHList (as :+ a))
+deriving instance Show (Args Void)
+deriving instance (Show (Args as), Show a) => Show (Args (as :+ a))
 
-deriving instance Show (HList '[])
-deriving instance (Show (HList as), Show a) => Show (HList (a ': as))
+-- deriving instance Show (HList '[])
+-- deriving instance (Show (HList as), Show a) => Show (HList (a ': as))
 
 type family RevToList ts where
   RevToList Void = '[]
   RevToList (as :+ a) = a ': RevToList as
 
-class RHListToHList (ts :: Type) where
-  type HListTypes ts :: [Type]
-  revHListToList :: RHList ts -> HList (HListTypes ts)
+-- class ArgsToHList (ts :: Type) where
+--   type HListTypes ts :: [Type]
+--   revHListToList :: Args ts -> HList (HListTypes ts)
 
-instance RHListToHList Void where
-  type HListTypes Void = '[]
-  revHListToList _ = HNil
+-- instance ArgsToHList Void where
+--   type HListTypes Void = '[]
+--   revHListToList _ = HNil
 
-instance (RHListToHList as) => RHListToHList (as :+ a) where
-  type HListTypes (as :+ a) = a ': HListTypes as
-  revHListToList (a :#! as) = a :# revHListToList as
+-- instance (ArgsToHList as) => ArgsToHList (as :+ a) where
+--   type HListTypes (as :+ a) = a ': HListTypes as
+--   revHListToList (a :#! as) = a :# revHListToList as
 
 class GetByType t ts where
-  getByType :: HList ts -> t
+  getByType :: Args ts -> t
 
-instance (GetByType t ts) => GetByType t (x ': ts) where
-  getByType (_ :# as) = getByType @t @ts as
+instance (GetByType t ts) => GetByType t (ts :+ x) where
+  getByType (_ :#! as) = getByType @t @ts as
 
-instance {-# OVERLAPPING #-} GetByType t (t ': ts) where
-  getByType (a :# _) = a
+instance {-# OVERLAPPING #-} GetByType t (ts :+ t) where
+  getByType (a :#! _) = a
 
-instance (TE.TypeError (TE.Text "Can't find " TE.:<>: TE.ShowType t TE.:<>: TE.Text " in context")) => GetByType t '[] where
+instance (TE.TypeError (TE.Text "Can't find " TE.:<>: TE.ShowType t TE.:<>: TE.Text " in context")) => GetByType t Void where
   getByType _ = undefined
 
-class Reverse' (l1 :: [Type]) (l2 :: [Type]) (l3 :: [Type]) | l1 l2 -> l3 where
-  reverse' :: HList l1 -> HList l2 -> HList l3
+-- class Reverse' (l1 :: [Type]) (l2 :: [Type]) (l3 :: [Type]) | l1 l2 -> l3 where
+--   reverse' :: HList l1 -> HList l2 -> HList l3
 
-instance Reverse' '[] l2 l2 where
-  reverse' _ l = l
+-- instance Reverse' '[] l2 l2 where
+--   reverse' _ l = l
 
-instance (Reverse' l (x ': l') z) => Reverse' (x ': l) l' z where
-  reverse' (x :# l) l' = reverse' l (x :# l')
+-- instance (Reverse' l (x ': l') z) => Reverse' (x ': l) l' z where
+--   reverse' (x :# l) l' = reverse' l (x :# l')
 
-class Reverse xs sx | xs -> sx, sx -> xs where
-  reverseHList :: HList xs -> HList sx
+-- class Reverse xs sx | xs -> sx, sx -> xs where
+--   reverseHList :: HList xs -> HList sx
 
-instance
-  ( Reverse' xs '[] sx
-  , Reverse' sx '[] xs
-  ) =>
-  Reverse xs sx
-  where
-  reverseHList l = reverse' l HNil
+-- instance
+--   ( Reverse' xs '[] sx
+--   , Reverse' sx '[] xs
+--   ) =>
+--   Reverse xs sx
+--   where
+--   reverseHList l = reverse' l HNil
 
 data Lenient e
 data Strict
@@ -121,7 +138,6 @@ newtype WithPiece a = WithPiece a
 newtype WithPieces a = WithPieces [a]
 newtype WithReq m r = WithReq (m r)
 newtype Hide a = Hide a
-newtype Computed m a = Computed (m a)
 
 class Hidden m a where
   runHidden :: Hide a -> m ()
@@ -144,86 +160,76 @@ instance (Monad m) => Hidden m (WithReq m a) where
 instance (Hidden m a) => Hidden m (Hide a) where
   runHidden (Hide a) = runHidden a
 
-class FunArgs (ts :: [Type]) where
+class FunArgs (ts :: Type) where
   type ts ~> r :: Type
+  apply :: (ts ~> r) -> Args ts -> r
 
-  apply :: (ts ~> r) -> HList ts -> r
-
-type HandleArgs ts st m =
-  ( FunArgs (DelayedArgs st)
-  , RHListToHList ts
-  , Reverse (HListTypes ts) st
-  , RunDelayed st m
+type HandleArgs ts m =
+  ( FunArgs (DelayedArgs ts)
+  , RunDelayed ts m
   , Monad m
   )
 
-instance FunArgs '[] where
-  type '[] ~> r = r
+instance FunArgs Void where
+  type Void ~> r = r
   {-# INLINE apply #-}
   apply a _ = a
 
-instance (RunDelayed as m) => RunDelayed (Computed m a ': as) m where
-  type DelayedArgs (Computed m a ': as) = a ': DelayedArgs as
-  {-# INLINE runDelayed #-}
-  runDelayed (Computed hIO :# as) = do
-    h <- hIO
-    rest <- runDelayed as
-    pure $ h :# rest
 
-instance (FunArgs as) => FunArgs (a ': as) where
-  type (a ': as) ~> r = a -> as ~> r
+instance (FunArgs as) => FunArgs (as :+ a) where
+  type (as :+ a) ~> r = as ~> (a -> r)
   {-# INLINE apply #-}
-  apply a (x :# xs) = apply (a x) xs
+  apply a (x :#! xs) = apply a xs x
 
 class (Monad m) => RunDelayed ts m where
-  type DelayedArgs ts :: [Type]
-  runDelayed :: HList ts -> m (HList (DelayedArgs ts))
+  type DelayedArgs ts :: Type
+  runDelayed :: Args ts -> m (Args (DelayedArgs ts))
 
-instance (Monad m) => RunDelayed '[] m where
-  type DelayedArgs '[] = '[]
+instance (Monad m) => RunDelayed Void m where
+  type DelayedArgs Void = Void
   {-# INLINE runDelayed #-}
-  runDelayed :: (Monad m) => HList '[] -> m (HList (DelayedArgs '[]))
-  runDelayed HNil = pure HNil
+  runDelayed :: (Monad m) => Args Void -> m (Args (DelayedArgs Void))
+  runDelayed ANil = pure ANil
 
-instance (RunDelayed as m) => RunDelayed (WithHeader required lenient m a ': as) m where
-  type DelayedArgs (WithHeader required lenient m a ': as) = Arg required lenient a ': DelayedArgs as
+instance (RunDelayed as m) => RunDelayed (as :+ WithHeader required lenient m a ) m where
+  type DelayedArgs (as :+ WithHeader required lenient m a) = DelayedArgs as :+ Arg required lenient a
   {-# INLINE runDelayed #-}
-  runDelayed (WithHeader hIO :# as) = do
-    h <- hIO
+  runDelayed (WithHeader hIO :#! as) = do
     rest <- runDelayed as
-    pure $ h :# rest
-
-instance (RunDelayed as m, IsRequest r) => RunDelayed (WithReq m r ': as) m where
-  type DelayedArgs (WithReq m r ': as) = RequestValue r ': DelayedArgs as
-  {-# INLINE runDelayed #-}
-  runDelayed (WithReq hIO :# as) = do
     h <- hIO
-    rest <- runDelayed as
-    pure $ getRequestValue h :# rest
+    pure $ h :#! rest
 
-instance (RunDelayed as m) => RunDelayed (WithQueryParam required lenient m a ': as) m where
-  type DelayedArgs (WithQueryParam required lenient m a ': as) = Arg required lenient a ': DelayedArgs as
+instance (RunDelayed as m, IsRequest r) => RunDelayed (as :+ WithReq m r ) m where
+  type DelayedArgs (as :+ WithReq m r) =DelayedArgs as :+ RequestValue r 
   {-# INLINE runDelayed #-}
-  runDelayed (WithQueryParam a :# as) = do
+  runDelayed (WithReq hIO :#! as) = do
+    rest <- runDelayed as
+    h <- hIO
+    pure $ getRequestValue h :#! rest
+
+instance (RunDelayed as m) => RunDelayed (as :+ WithQueryParam required lenient m a) m where
+  type DelayedArgs (as :+ WithQueryParam required lenient m a) = DelayedArgs as :+  Arg required lenient a
+  {-# INLINE runDelayed #-}
+  runDelayed (WithQueryParam a :#! as) = do
+    rest <- runDelayed as
     a' <- a
-    rest <- runDelayed as
-    pure $ a' :# rest
+    pure $ a' :#! rest
 
-instance (RunDelayed as m) => RunDelayed (WithPiece a ': as) m where
-  type DelayedArgs (WithPiece a ': as) = a ': DelayedArgs as
+instance (RunDelayed as m) => RunDelayed (as :+ WithPiece a) m where
+  type DelayedArgs ( as :+ WithPiece a) = DelayedArgs as :+ a 
   {-# INLINE runDelayed #-}
-  runDelayed (WithPiece a :# as) = do
+  runDelayed (WithPiece a :#! as) = do
     rest <- runDelayed as
-    pure $ a :# rest
+    pure $ a :#! rest
 
-instance (RunDelayed as m) => RunDelayed (WithPieces a ': as) m where
-  type DelayedArgs (WithPieces a ': as) = [a] ': DelayedArgs as
+instance (RunDelayed as m) => RunDelayed (as :+ WithPieces a) m where
+  type DelayedArgs (as :+ WithPieces a) = DelayedArgs as :+ [a]
   {-# INLINE runDelayed #-}
-  runDelayed (WithPieces a :# as) = do
+  runDelayed (WithPieces a :#! as) = do
     rest <- runDelayed as
-    pure $ a :# rest
+    pure $ a :#! rest
 
-instance (RunDelayed as m, Hidden m a) => RunDelayed (Hide a ': as) m where
-  type DelayedArgs (Hide a ': as) = DelayedArgs as
+instance (RunDelayed as m, Hidden m a) => RunDelayed (as :+ Hide a) m where
+  type DelayedArgs (as :+ Hide a) = DelayedArgs as
   {-# INLINE runDelayed #-}
-  runDelayed (a :# as) = runHidden a >> runDelayed as
+  runDelayed (a :#! as) = runDelayed as <* runHidden a

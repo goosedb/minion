@@ -63,7 +63,7 @@ module Web.Minion (
   MatchedQuery (..),
   serve,
   serveWithSettings,
-  serveWithSettingsAndParams,
+  serveWithSettingsAndArgs,
   defaultMinionSettings,
   defaultRouteSettings,
   defaultErrorBuilders,
@@ -174,7 +174,7 @@ alt :: [Router' i ts r] -> Router' i ts r
 alt = fromList
 
 -- | Way to handle raw 'Wai.Request' and respond with raw 'Wai.Response'. Unintrospectable
-raw :: forall ts st m i. (HandleArgs ts st m) => (Wai.Request -> DelayedArgs st ~> m Wai.Response) -> Router' i ts m
+raw :: forall ts m i. (HandleArgs ts m) => (Wai.Request -> DelayedArgs ts ~> m Wai.Response) -> Router' i ts m
 raw f = Raw (apply . f)
 
 {- | Handles request with specified HTTP method
@@ -185,22 +185,22 @@ raw f = Raw (apply . f)
 -}
 {-# INLINE handle #-}
 handle ::
-  forall o m ts i st.
-  ( HandleArgs ts st m
+  forall o m ts i.
+  ( HandleArgs ts m
   , ToResponse m o
   , CanRespond o
   , I.Introspection i I.Response o
   ) =>
   -- | .
   Http.Method ->
-  (DelayedArgs st ~> m o) ->
+  (DelayedArgs ts ~> m o) ->
   Router' i ts m
 handle = handlePP @o @o @m @m id
 
 {-# INLINE handlePP #-}
 handlePP ::
-  forall a o n m ts i st.
-  ( HandleArgs ts st m
+  forall a o n m ts i.
+  ( HandleArgs ts  m
   , ToResponse m o
   , CanRespond o
   , I.Introspection i I.Response o
@@ -208,7 +208,7 @@ handlePP ::
   -- | post process
   (n a -> m o) ->
   Http.Method ->
-  (DelayedArgs st ~> n a) ->
+  (DelayedArgs ts ~> n a) ->
   Router' i ts m
 handlePP nt method f = Handle @o method (nt . apply f)
 
@@ -272,12 +272,12 @@ defaultErrorBuilders =
 -- | The same as 'serve' but allows to configure exceptions handlers
 {-# INLINE serveWithSettings #-}
 serveWithSettings :: (IO.MonadIO m, Exc.MonadCatch m) => MinionSettings m -> Router' i Void m -> ApplicationM m
-serveWithSettings settings = serveWithSettingsAndParams settings RHNil
+serveWithSettings settings = serveWithSettingsAndArgs settings ANil
 
 -- | The same as 'serve' but allows to configure exceptions handlers and initial params
-{-# INLINE serveWithSettingsAndParams #-}
-serveWithSettingsAndParams :: (IO.MonadIO m, Exc.MonadCatch m) => MinionSettings m -> RHList params -> Router' i params m -> ApplicationM m
-serveWithSettingsAndParams MinionSettings{..} params router req resp =
+{-# INLINE serveWithSettingsAndArgs #-}
+serveWithSettingsAndArgs :: (IO.MonadIO m, Exc.MonadCatch m) => MinionSettings m -> Args params -> Router' i params m -> ApplicationM m
+serveWithSettingsAndArgs MinionSettings{..} params router req resp =
   Exc.catches @[]
     (route routeSettings errorBuilders (RoutingState (filter (not . Text.null) $ Http.pathInfo req) [] [] []) params router req resp)
     [ Exc.Handler \(NoMatch e) -> maybe notFound httpError e >>= IO.liftIO . resp

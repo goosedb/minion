@@ -1,28 +1,34 @@
-module Web.Minion.Request.Body (
-  reqBody,
-  reqBodyStream,
-  DecodeBody (),
-  IsRequest (..),
-  ReqBody (..),
-  ReqBodyStream (..),
-  Decode (..),
-  Encode (..),
-  EncodeStream (..),
-  DecodeBodyStream (),
-  ParseBodyError (..),
-) where
+module Web.Minion.Request.Body
+  ( reqBody,
+    handleEnv,
+    Rest,
+    reqBodyStream,
+    DecodeBody (),
+    IsRequest (..),
+    ReqBody (..),
+    ReqBodyStream (..),
+    Decode (..),
+    Encode (..),
+    EncodeStream (..),
+    DecodeBodyStream (),
+    ParseBodyError (..),
+  )
+where
 
 import Control.Monad.Catch
 import Control.Monad.IO.Class qualified as IO
 import GHC.Base (Type)
+import Network.HTTP.Types qualified as H
 import Network.HTTP.Types qualified as Http
 import Network.Wai qualified as Wai
-import Web.Minion.Args (WithReq)
-import Web.Minion.Introspect qualified as I
-
+import Web.Minion.Args (Args, DelayedArgs, HandleArgs, WithReq, type (~>))
+import Web.Minion.Args qualified as M
+import Web.Minion.Args.Internal (Bite (..), FunArgs, Rest)
 import Web.Minion.Codec.Decode.Internal
 import Web.Minion.Codec.Encode
+import Web.Minion.Introspect qualified as I
 import Web.Minion.Request
+import Web.Minion.Response.Body
 import Web.Minion.Router
 
 newtype ReqBody (cts :: [Type]) a = ReqBody a
@@ -37,18 +43,17 @@ instance IsRequest (ReqBodyStream cts a) where
   type RequestValue (ReqBodyStream cts a) = a
   getRequestValue (ReqBodyStream a) = a
 
-{- | Extracts request body with specified Content-Type
-
-@
-... '/>' 'reqBody' \@'[PlainText] \@MyRequest '.>' ...
-@
--}
+-- | Extracts request body with specified Content-Type
+--
+-- @
+-- ... '/>' 'reqBody' \@'[PlainText] \@MyRequest '.>' ...
+-- @
 reqBody ::
   forall cts r m i ts.
-  ( I.Introspection i I.Request (ReqBody cts r)
-  , IO.MonadIO m
-  , MonadThrow m
-  , DecodeBody cts r
+  ( I.Introspection i I.Request (ReqBody cts r),
+    IO.MonadIO m,
+    MonadThrow m,
+    DecodeBody cts r
   ) =>
   -- | .
   ValueCombinator i (WithReq m (ReqBody cts r)) ts m
@@ -66,12 +71,11 @@ handleError makeError req = \case
   UnsupportedMime _ -> throwM $ makeError req Http.status415 "Unsupported Content-Type"
   InvalidMime _ -> throwM $ makeError req Http.status415 "Unsupported Content-Type"
 
-{- | Extracts streaming request body with specified Content-Type
-
-@
-... '/>' 'reqBodyStream' \@'['Web.Minion.Media.OctetStream.OctetStream' 'Web.Minion.Media.OctetStream.Chunks'] \@MyStreamingRequest '.>' ...
-@
--}
+-- | Extracts streaming request body with specified Content-Type
+--
+-- @
+-- ... '/>' 'reqBodyStream' \@'['Web.Minion.Media.OctetStream.OctetStream' 'Web.Minion.Media.OctetStream.Chunks'] \@MyStreamingRequest '.>' ...
+-- @
 reqBodyStream ::
   forall cts r m i ts.
   (I.Introspection i I.Request (ReqBodyStream cts r)) =>
@@ -86,3 +90,15 @@ reqBodyStream = Request \makeError req -> do
   case result of
     Left e -> handleError makeError req e
     Right a -> pure (ReqBodyStream a)
+
+handleEnv ::
+  forall bite ts r n m i.
+  (IsResponse m r, FunArgs (Rest bite (DelayedArgs ts)), HandleArgs ts m, I.Introspection i 'I.Response r, Bite bite (DelayedArgs ts)) =>
+  (forall x. Args bite -> n x -> m x) ->
+  H.Method ->
+  (Rest bite (DelayedArgs ts) ~> n r) ->
+  Router' i ts m
+handleEnv run m f =
+  Handle @r m \h ->
+    let (bitten, rest) = bite @bite h
+     in run bitten (M.apply f rest)

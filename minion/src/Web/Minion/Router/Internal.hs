@@ -28,13 +28,13 @@ import GHC.Generics (Generic)
 import Web.Minion.Args.Internal (
   Arg,
   FunArgs (apply, type (~>)),
-  HList,
+  -- HList,
   HandleArgs,
   IsLenient,
   IsRequired,
-  RHList ((:#!)),
-  RHListToHList (revHListToList),
-  Reverse (reverseHList),
+  Args ((:#!)),
+  -- ArgsToHList (revHListToList),
+  -- Reverse (reverseHList),
   RunDelayed (DelayedArgs, runDelayed),
   WithHeader (..),
   WithPiece (..),
@@ -166,21 +166,21 @@ data Router' (i :: [Type]) (ts :: Type) m where
     Router' i ts m
   -- -- | Additional constraints provider with `request` and `response` can be useful for introspection
   Handle ::
-    forall o m ts i st.
-    ( HandleArgs ts st m
+    forall o m ts i.
+    ( HandleArgs ts m
     , ToResponse m o
     , CanRespond o
     , I.Introspection i I.Response o
     ) =>
     -- | Handled HTTP method
     Http.Method ->
-    (HList (DelayedArgs st) -> m o) ->
+    (Args (DelayedArgs ts) -> m o) ->
     Router' i ts m
   Raw ::
-    forall m ts i st.
-    (HandleArgs ts st m) =>
+    forall m ts i.
+    (HandleArgs ts m) =>
     -- | Handled
-    (Wai.Request -> HList (DelayedArgs st) -> m Wai.Response) ->
+    (Wai.Request -> Args (DelayedArgs ts) -> m Wai.Response) ->
     Router' i ts m
   Description ::
     forall desc i m ts.
@@ -191,7 +191,7 @@ data Router' (i :: [Type]) (ts :: Type) m where
     Router' i ts m
   MapArgs ::
     forall m ts ts' i.
-    (RHList ts -> RHList ts') ->
+    (Args ts -> Args ts') ->
     Router' i ts' m ->
     Router' i ts m
   HideIntrospection ::
@@ -224,13 +224,13 @@ route ::
   RouteSettings m ->
   ErrorBuilders ->
   RoutingState ->
-  RHList ts ->
+  Args ts ->
   Router' i ts m ->
   ApplicationM m
 route routeSettings ErrorBuilders{..} = go
  where
   {-# INLINE go #-}
-  go :: forall ts' i'. (IO.MonadIO m, Exc.MonadCatch m) => RoutingState -> RHList ts' -> Router' i' ts' m -> ApplicationM m
+  go :: forall ts' i'. (IO.MonadIO m, Exc.MonadCatch m) => RoutingState -> Args ts' -> Router' i' ts' m -> ApplicationM m
   go state@RoutingState{..} args =
     \case
       Alt routes -> \req resp -> goThrough (NoMatch Nothing) $ map (\r -> go state args r req resp) routes
@@ -287,30 +287,30 @@ memoize action = do
 
 {-# INLINE routeRaw #-}
 routeRaw ::
-  forall m ts st.
-  (IO.MonadIO m, HandleArgs ts st m) =>
+  forall m ts.
+  (IO.MonadIO m, HandleArgs ts m) =>
   RouteSettings m ->
   RoutingState ->
-  RHList ts ->
-  (Wai.Request -> HList (DelayedArgs st) -> m Wai.Response) ->
+  Args ts ->
+  (Wai.Request -> Args (DelayedArgs ts) -> m Wai.Response) ->
   ApplicationM m
 routeRaw RouteSettings{..} RoutingState{..} args f req resp = do
   let method = Wai.requestMethod req
   let matched = MatchedData{path = reverse matchedPath, headers = matchedHeaders, query = matchedQuery, method}
   withMatchedData matched do
-    args' <- runDelayed (reverseHList (revHListToList args))
+    args' <- runDelayed args
     response <- onHandle req $ f req args'
     IO.liftIO (resp response) <* onResponseSent req
 
 {-# INLINE routeHandle #-}
 routeHandle ::
-  forall m o ts st.
-  (IO.MonadIO m, ToResponse m o, CanRespond o, HandleArgs ts st m) =>
+  forall m o ts.
+  (IO.MonadIO m, ToResponse m o, CanRespond o, HandleArgs ts m) =>
   RouteSettings m ->
   RoutingState ->
-  RHList ts ->
+  Args ts ->
   Http.Method ->
-  (HList (DelayedArgs st) -> m o) ->
+  (Args (DelayedArgs ts) -> m o) ->
   ApplicationM m
 routeHandle RouteSettings{..} RoutingState{..} args method f req resp = do
   checkHandler req path method
@@ -320,7 +320,7 @@ routeHandle RouteSettings{..} RoutingState{..} args method f req resp = do
     then do
       let matched = MatchedData{path = reverse matchedPath, headers = matchedHeaders, query = matchedQuery, method}
       withMatchedData matched do
-        args' <- runDelayed (reverseHList (revHListToList args))
+        args' <- runDelayed args
         response <- onHandle req $ f args' >>= toResponse @m @o acceptHeader
         sendResponse response <* onResponseSent req
     else sendResponse (Wai.responseBuilder Http.status406 [] mempty) <* onResponseSent req
@@ -394,15 +394,15 @@ type ApplicationM m =
 
 {-# INLINE makeHandle #-}
 makeHandle ::
-  forall f o m ts i st.
-  ( HandleArgs ts st m
+  forall f o m ts i.
+  ( HandleArgs ts m
   , ToResponse m (f o)
   , CanRespond (f o)
   , I.Introspection i I.Response (f o)
   ) =>
   Http.Method ->
   (o -> f o) ->
-  (DelayedArgs st ~> m o) ->
+  (DelayedArgs ts ~> m o) ->
   Router' i ts m
 makeHandle method packResponse f =
   Handle @(f o) method (fmap packResponse . apply f)
