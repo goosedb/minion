@@ -35,7 +35,6 @@ instance (Bite (ts :+ x) ts', Rest (ts :+ x) (ts' :+ t) ~ Rest (ts :+ x) ts' :+ 
     let (x, y) = bite @(ts :+ x) @ts' as
     in (x, a :#! y)
 
--- | R(eversed) HList
 data Args ts where
   ANil :: Args Void
   (:#!) :: t -> Args ts -> Args (ts :+ t)
@@ -51,24 +50,6 @@ infixr 1 :#!
 deriving instance Show (Args Void)
 deriving instance (Show (Args as), Show a) => Show (Args (as :+ a))
 
--- deriving instance Show (HList '[])
--- deriving instance (Show (HList as), Show a) => Show (HList (a ': as))
-
-type family RevToList ts where
-  RevToList Void = '[]
-  RevToList (as :+ a) = a ': RevToList as
-
--- class ArgsToHList (ts :: Type) where
---   type HListTypes ts :: [Type]
---   revHListToList :: Args ts -> HList (HListTypes ts)
-
--- instance ArgsToHList Void where
---   type HListTypes Void = '[]
---   revHListToList _ = HNil
-
--- instance (ArgsToHList as) => ArgsToHList (as :+ a) where
---   type HListTypes (as :+ a) = a ': HListTypes as
---   revHListToList (a :#! as) = a :# revHListToList as
 
 class GetByType t ts where
   getByType :: Args ts -> t
@@ -81,26 +62,6 @@ instance {-# OVERLAPPING #-} GetByType t (ts :+ t) where
 
 instance (TE.TypeError (TE.Text "Can't find " TE.:<>: TE.ShowType t TE.:<>: TE.Text " in context")) => GetByType t Void where
   getByType _ = undefined
-
--- class Reverse' (l1 :: [Type]) (l2 :: [Type]) (l3 :: [Type]) | l1 l2 -> l3 where
---   reverse' :: HList l1 -> HList l2 -> HList l3
-
--- instance Reverse' '[] l2 l2 where
---   reverse' _ l = l
-
--- instance (Reverse' l (x ': l') z) => Reverse' (x ': l) l' z where
---   reverse' (x :# l) l' = reverse' l (x :# l')
-
--- class Reverse xs sx | xs -> sx, sx -> xs where
---   reverseHList :: HList xs -> HList sx
-
--- instance
---   ( Reverse' xs '[] sx
---   , Reverse' sx '[] xs
---   ) =>
---   Reverse xs sx
---   where
---   reverseHList l = reverse' l HNil
 
 data Lenient e
 data Strict

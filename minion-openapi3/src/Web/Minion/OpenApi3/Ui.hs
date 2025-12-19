@@ -18,7 +18,6 @@ import Web.Minion.Media.Html (Html)
 import Web.Minion.OpenApi3
 import Web.Minion.Request.Body (IsRequest (..))
 import Web.Minion.Response (Redirect (Redirect))
-import Web.Minion.Router (Router' (..))
 import Web.Minion.Static
 
 newtype CurrentPath = CurrentPath Text.Text
@@ -31,8 +30,8 @@ currentPath :: (Monad m) => ValueCombinator '[] (WithReq m CurrentPath) ts m
 currentPath = Request \_ req -> pure $ CurrentPath $ Text.intercalate "/" $ Wai.pathInfo req
 
 openapi3 ::
-  forall m ts st i.
-  ( HandleArgs ts st m
+  forall m ts i.
+  ( HandleArgs ts m
   , MonadIO m
   , I.Elem OpenApi3 i
   ) =>

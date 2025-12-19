@@ -20,7 +20,6 @@ module Web.Minion.OpenApi3 (
 
 import Data.OpenApi hiding (Header (..))
 import Web.Minion hiding (description, status)
-import Web.Minion.Router
 
 import Control.Arrow ((>>>))
 import Control.Lens hiding (index)

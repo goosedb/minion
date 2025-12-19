@@ -10,7 +10,6 @@ import Network.WebSockets qualified as Websocket
 import Web.Minion
 import Web.Minion.Introspect qualified as I
 import Web.Minion.Request (IsRequest (..))
-import Web.Minion.Router (Router' (..))
 
 newtype WebsocketRequest = WebsocketRequest
   { requestHead :: Websocket.RequestHead
@@ -29,19 +28,19 @@ instance CanRespond WebsocketHandler where
   canRespond = const True
 
 websocket ::
-  forall ts st m i.
-  ( HandleArgs (ts :+ WithReq m WebsocketRequest) st m
+  forall ts m i.
+  ( HandleArgs (ts :+ WithReq m WebsocketRequest) m
   , I.Introspection i 'I.Response WebsocketHandler
   , Monad m
   , I.Introspection i I.Request WebsocketRequest
   , MonadThrow m
   ) =>
-  (DelayedArgs st ~> m WebsocketHandler) -> Router' i ts m
+  (DelayedArgs ts ~> (WebsocketRequest -> m WebsocketHandler)) -> Router' i ts m
 websocket f = websocketReq .> handle @WebsocketHandler GET f
  where
   websocketReq ::
     (I.Introspection i I.Request WebsocketRequest, Monad m, MonadThrow m) =>
-    Router' i (ts :+ WithReq m WebsocketRequest) m -> Router' i ts m
+    ValueCombinator i (WithReq m WebsocketRequest) ts m
   websocketReq = Request \_ req ->
     if Websocket.isWebSocketsReq req
       then pure $ WebsocketRequest (Websocket.getRequestHead req)
