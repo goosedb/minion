@@ -95,14 +95,14 @@ instance DecodeBodyStream '[] a where
 
 instance (ContentType ct, Decode ct a, DecodeBody cts a) => DecodeBody (ct ': cts) a where
   decodeBody contentType body
-    | Just _ <- Http.matchAccept (Nel.toList $ media @ct) contentType = parseCt @ct @a body
+    | Just _ <- Http.matchContent (Nel.toList $ media @ct) contentType = parseCt @ct @a body
     | otherwise = do
         decodeBody @cts contentType body <&> either Left Right
   decodeBodyFirst = parseCt @ct
 
 instance (ContentType ct, DecodeStream ct a, DecodeBodyStream cts a) => DecodeBodyStream (ct ': cts) a where
   decodeBodyStream contentType body
-    | Just _ <- Http.matchAccept (Nel.toList $ media @ct) contentType = parseCtStream @ct @a body
+    | Just _ <- Http.matchContent (Nel.toList $ media @ct) contentType = parseCtStream @ct @a body
     | otherwise = do
         decodeBodyStream @cts contentType body <&> either Left Right
   decodeBodyFirstStream = parseCtStream @ct
